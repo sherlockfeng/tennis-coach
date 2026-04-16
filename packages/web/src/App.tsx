@@ -1,0 +1,606 @@
+import { useState, useRef, useEffect } from 'react'
+import axios from 'axios'
+
+// ─── Types ───────────────────────────────────────────────────────────
+
+export interface ChatMessage {
+  role: 'user' | 'assistant'
+  content: string
+  images?: string[]
+  frames?: string[]
+  isAnalysis?: boolean
+}
+
+interface FrameSettings {
+  startSec: number
+  endSec: number
+  fps: number
+  videoDuration: number
+}
+
+interface ProPlayer {
+  id: string
+  name: string
+  style: string
+}
+
+type PanelMode = 'analyze' | 'compare' | 'pro'
+
+// ─── Sub-components ──────────────────────────────────────────────────
+
+function MessageBubble({ msg }: { msg: ChatMessage }) {
+  const isUser = msg.role === 'user'
+  return (
+    <div className={`flex gap-3 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
+      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm shrink-0
+        ${isUser ? 'bg-green-700' : 'bg-gray-700'}`}>
+        {isUser ? '👤' : '🎾'}
+      </div>
+      <div className={`max-w-[80%] space-y-2 ${isUser ? 'items-end' : 'items-start'} flex flex-col`}>
+        {msg.images && msg.images.length > 0 && (
+          <div className="flex flex-wrap gap-1">
+            {msg.images.map((img, i) => (
+              <img key={i} src={`data:image/jpeg;base64,${img}`}
+                className="h-24 w-auto rounded-lg object-cover border border-gray-700" />
+            ))}
+          </div>
+        )}
+        {msg.frames && msg.frames.length > 0 && (
+          <div>
+            <p className="text-xs text-gray-500 mb-1">已提取 {msg.frames.length} 帧</p>
+            <div className="flex flex-wrap gap-1">
+              {msg.frames.map((f, i) => (
+                <img key={i} src={`data:image/jpeg;base64,${f}`}
+                  className="h-16 w-auto rounded border border-gray-700 object-cover" />
+              ))}
+            </div>
+          </div>
+        )}
+        <div className={`rounded-2xl px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap
+          ${isUser ? 'bg-green-700 text-white rounded-tr-sm' : 'bg-gray-800 text-gray-100 rounded-tl-sm'}`}>
+          {msg.content}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function FrameSlider({ label, value, min, max, step, unit, onChange }: {
+  label: string; value: number; min: number; max: number
+  step: number; unit: string; onChange: (v: number) => void
+}) {
+  return (
+    <div className="space-y-1">
+      <div className="flex justify-between text-xs text-gray-400">
+        <span>{label}</span>
+        <span className="text-white font-medium">{value} {unit}</span>
+      </div>
+      <input type="range" min={min} max={max} step={step} value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="w-full accent-green-500" />
+    </div>
+  )
+}
+
+function VideoSlot({
+  label, file, preview, onSelect, onClear, settings, onSettingsChange, videoRef,
+}: {
+  label: string
+  file: File | null
+  preview: string | null
+  onSelect: () => void
+  onClear: () => void
+  settings: FrameSettings
+  onSettingsChange: (s: FrameSettings) => void
+  videoRef: React.RefObject<HTMLVideoElement>
+}) {
+  const frameCount = Math.max(1, Math.floor((settings.endSec - settings.startSec) * settings.fps))
+  return (
+    <div className="space-y-2">
+      <p className="text-xs font-semibold text-gray-400">{label}</p>
+      {!file ? (
+        <div onClick={onSelect}
+          className="border-2 border-dashed border-gray-700 rounded-xl p-4 text-center
+            cursor-pointer hover:border-green-500 hover:bg-green-950/20 transition-colors">
+          <div className="text-xl mb-1">📁</div>
+          <p className="text-xs text-gray-400">点击选择</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          <div className="flex items-center gap-2 bg-gray-800 rounded-lg px-3 py-1.5">
+            <span className="text-base">🎞️</span>
+            <span className="text-xs text-gray-200 flex-1 truncate">{file.name}</span>
+            <button onClick={onClear} className="text-xs text-gray-500 hover:text-red-400">✕</button>
+          </div>
+          {preview && (
+            <video ref={videoRef} src={preview} className="hidden"
+              onLoadedMetadata={() => {
+                if (videoRef.current) {
+                  const d = Math.floor(videoRef.current.duration)
+                  onSettingsChange({ ...settings, startSec: 0, endSec: d, videoDuration: d })
+                }
+              }} />
+          )}
+          <div className="bg-gray-800 rounded-lg p-3 space-y-2">
+            <FrameSlider label="开始" value={settings.startSec} min={0}
+              max={Math.max(0, settings.videoDuration - 1)} step={1} unit="s"
+              onChange={(v) => onSettingsChange({
+                ...settings, startSec: v,
+                endSec: v >= settings.endSec ? Math.min(v + 1, settings.videoDuration) : settings.endSec,
+              })} />
+            <FrameSlider label="结束" value={settings.endSec}
+              min={settings.startSec + 1} max={settings.videoDuration} step={1} unit="s"
+              onChange={(v) => onSettingsChange({ ...settings, endSec: v })} />
+            <FrameSlider label="帧率" value={settings.fps} min={0.5} max={5} step={0.5} unit="fps"
+              onChange={(v) => onSettingsChange({ ...settings, fps: v })} />
+            <div className="text-right text-xs">
+              <span className={frameCount > 20 ? 'text-yellow-400' : 'text-green-400'}>
+                约 {frameCount} 帧{frameCount > 20 ? ' ⚠️' : ''}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Main App ─────────────────────────────────────────────────────────
+
+const DEFAULT_SETTINGS: FrameSettings = { startSec: 0, endSec: 10, fps: 2, videoDuration: 10 }
+
+export default function App() {
+  const [messages, setMessages] = useState<ChatMessage[]>([{
+    role: 'assistant',
+    content: '你好！我是你的 AI 网球教练 🎾\n\n你可以：\n• 直接发消息提问\n• 上传图片分析动作\n• 上传视频逐帧分析\n• 两段视频对比（改进前后）\n• 与职业球员对比，或推荐相似风格球员',
+  }])
+  const [apiHistory, setApiHistory] = useState<{ role: 'user' | 'assistant'; content: string }[]>([])
+  const [inputText, setInputText] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  // Panel
+  const [showVideoPanel, setShowVideoPanel] = useState(false)
+  const [panelMode, setPanelMode] = useState<PanelMode>('analyze')
+
+  // Video A (single analysis / compare A / pro compare)
+  const [videoA, setVideoA] = useState<File | null>(null)
+  const [previewA, setPreviewA] = useState<string | null>(null)
+  const [settingsA, setSettingsA] = useState<FrameSettings>(DEFAULT_SETTINGS)
+
+  // Video B (compare only)
+  const [videoB, setVideoB] = useState<File | null>(null)
+  const [previewB, setPreviewB] = useState<string | null>(null)
+  const [settingsB, setSettingsB] = useState<FrameSettings>(DEFAULT_SETTINGS)
+
+  // Pro player
+  const [proPlayers, setProPlayers] = useState<ProPlayer[]>([])
+  const [selectedPlayer, setSelectedPlayer] = useState('')
+  const [recommendMode, setRecommendMode] = useState(false)
+
+  // Images
+  const [pendingImages, setPendingImages] = useState<{ file: File; b64: string }[]>([])
+
+  const fileARef = useRef<HTMLInputElement>(null)
+  const fileBRef = useRef<HTMLInputElement>(null)
+  const imageInputRef = useRef<HTMLInputElement>(null)
+  const videoRefA = useRef<HTMLVideoElement>(null)
+  const videoRefB = useRef<HTMLVideoElement>(null)
+  const bottomRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages, loading])
+
+  // Fetch pro players list on mount
+  useEffect(() => {
+    axios.get<{ players: ProPlayer[] }>('/api/compare/players')
+      .then(r => setProPlayers(r.data.players))
+      .catch(() => {})
+  }, [])
+
+  const frameCountA = Math.max(1, Math.floor((settingsA.endSec - settingsA.startSec) * settingsA.fps))
+
+  const addMessage = (msg: ChatMessage) => setMessages(prev => [...prev, msg])
+
+  // ── Text / image chat ────────────────────────────────────────────
+  const sendTextMessage = async () => {
+    const text = inputText.trim()
+    if (!text && pendingImages.length === 0) return
+    setLoading(true)
+
+    const snapshot = [...pendingImages]
+    const userMsg: ChatMessage = {
+      role: 'user',
+      content: text || (snapshot.length > 1
+        ? `请分析这 ${snapshot.length} 张图片中的网球动作。`
+        : '请分析这张图片中的网球动作。'),
+      images: snapshot.map(p => p.b64),
+    }
+    addMessage(userMsg)
+    setInputText('')
+    setPendingImages([])
+
+    try {
+      let reply = ''
+      let newHistory = [...apiHistory]
+
+      if (snapshot.length > 0) {
+        const fd = new FormData()
+        snapshot.forEach(p => fd.append('images', p.file))
+        fd.append('text', userMsg.content)
+        fd.append('history', JSON.stringify(apiHistory))
+        const res = await axios.post('/api/chat/image', fd, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        })
+        reply = res.data.reply
+        newHistory = res.data.updatedHistory
+      } else {
+        const hist = [...apiHistory, { role: 'user' as const, content: text }]
+        const res = await axios.post('/api/chat', { messages: hist })
+        reply = res.data.reply
+        newHistory = [...hist, { role: 'assistant' as const, content: reply }]
+      }
+
+      setApiHistory(newHistory)
+      addMessage({ role: 'assistant', content: reply })
+    } catch (err: unknown) {
+      const msg = axios.isAxiosError(err) ? (err.response?.data?.error ?? err.message) : String(err)
+      addMessage({ role: 'assistant', content: `❌ 出错了：${msg}` })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // ── Single video analysis ────────────────────────────────────────
+  const sendVideoAnalysis = async () => {
+    if (!videoA) return
+    setLoading(true)
+    setShowVideoPanel(false)
+
+    addMessage({ role: 'user', content: `📹 视频分析：第 ${settingsA.startSec}s~${settingsA.endSec}s，${settingsA.fps} fps（约 ${frameCountA} 帧）` })
+
+    try {
+      const fd = new FormData()
+      fd.append('video', videoA)
+      fd.append('startSec', String(settingsA.startSec))
+      fd.append('endSec', String(settingsA.endSec))
+      fd.append('fps', String(settingsA.fps))
+      fd.append('history', JSON.stringify(apiHistory))
+
+      const res = await axios.post('/api/analyze', fd, {
+        headers: { 'Content-Type': 'multipart/form-data' }, timeout: 120_000,
+      })
+
+      addMessage({ role: 'assistant', content: res.data.analysis, frames: res.data.frames, isAnalysis: true })
+      setApiHistory(res.data.updatedHistory)
+      setVideoA(null); setPreviewA(null)
+    } catch (err: unknown) {
+      const msg = axios.isAxiosError(err) ? (err.response?.data?.error ?? err.message) : String(err)
+      addMessage({ role: 'assistant', content: `❌ 分析失败：${msg}` })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // ── Video comparison ─────────────────────────────────────────────
+  const sendComparison = async () => {
+    if (!videoA) return
+    setLoading(true)
+    setShowVideoPanel(false)
+
+    const modeLabel = panelMode === 'compare'
+      ? `📊 两段视频对比`
+      : recommendMode
+        ? `🔍 打法风格推荐`
+        : `🏆 与${selectedPlayer || '职业球员'}对比`
+
+    addMessage({ role: 'user', content: modeLabel })
+
+    try {
+      const fd = new FormData()
+      fd.append('videoA', videoA)
+      fd.append('startSecA', String(settingsA.startSec))
+      fd.append('endSecA', String(settingsA.endSec))
+      fd.append('fpsA', String(settingsA.fps))
+
+      if (panelMode === 'compare' && videoB) {
+        fd.append('videoB', videoB)
+        fd.append('startSecB', String(settingsB.startSec))
+        fd.append('endSecB', String(settingsB.endSec))
+        fd.append('fpsB', String(settingsB.fps))
+      } else if (panelMode === 'pro') {
+        if (recommendMode) {
+          fd.append('recommendStyle', 'true')
+        } else {
+          fd.append('playerName', selectedPlayer)
+        }
+      }
+
+      fd.append('history', JSON.stringify(apiHistory))
+
+      const res = await axios.post('/api/compare', fd, {
+        headers: { 'Content-Type': 'multipart/form-data' }, timeout: 180_000,
+      })
+
+      addMessage({ role: 'assistant', content: res.data.analysis, frames: res.data.framesA, isAnalysis: true })
+      setApiHistory(res.data.updatedHistory)
+      setVideoA(null); setPreviewA(null); setVideoB(null); setPreviewB(null)
+    } catch (err: unknown) {
+      const msg = axios.isAxiosError(err) ? (err.response?.data?.error ?? err.message) : String(err)
+      addMessage({ role: 'assistant', content: `❌ 对比分析失败：${msg}` })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleImageSelect = (file: File) => {
+    const reader = new FileReader()
+    reader.onload = e => {
+      const b64 = (e.target?.result as string).split(',')[1]
+      setPendingImages(prev => [...prev, { file, b64 }])
+    }
+    reader.readAsDataURL(file)
+  }
+
+  const canSubmitPanel = panelMode === 'analyze'
+    ? !!videoA
+    : panelMode === 'compare'
+      ? !!videoA && !!videoB
+      : !!videoA
+
+  const submitPanel = panelMode === 'analyze' ? sendVideoAnalysis : sendComparison
+
+  const submitLabel = () => {
+    if (!canSubmitPanel) return panelMode === 'compare' ? '请上传两段视频' : '请先选择视频'
+    if (loading) return '分析中…'
+    if (panelMode === 'analyze') return `③ 开始分析（${frameCountA} 帧）`
+    if (panelMode === 'compare') return '③ 开始对比分析'
+    return recommendMode ? '③ 推荐相似球员' : `③ 与 ${selectedPlayer || '球员'} 对比`
+  }
+
+  // ── Render ────────────────────────────────────────────────────────
+  return (
+    <div className="flex flex-col h-screen">
+      {/* Header */}
+      <header className="border-b border-gray-800 px-4 py-3 flex items-center gap-3 shrink-0">
+        <span className="text-xl">🎾</span>
+        <div className="flex-1">
+          <h1 className="text-base font-bold text-white">AI 网球教练</h1>
+          <p className="text-xs text-gray-500">专业分析 · 职业球员对比 · 器材推荐</p>
+        </div>
+        <button
+          onClick={() => {
+            setMessages([{ role: 'assistant', content: '新对话开始了 🎾 有什么可以帮你？' }])
+            setApiHistory([])
+          }}
+          className="text-xs text-gray-500 hover:text-gray-300 transition-colors">
+          新对话
+        </button>
+      </header>
+
+      {/* Messages */}
+      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+        {messages.map((msg, i) => <MessageBubble key={i} msg={msg} />)}
+        {loading && (
+          <div className="flex gap-3">
+            <div className="w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center">🎾</div>
+            <div className="bg-gray-800 rounded-2xl rounded-tl-sm px-4 py-2.5">
+              <div className="flex gap-1">
+                {[0, 1, 2].map(i => (
+                  <div key={i} className="w-2 h-2 rounded-full bg-green-500 animate-bounce"
+                    style={{ animationDelay: `${i * 0.15}s` }} />
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+        <div ref={bottomRef} />
+      </div>
+
+      {/* Pending images */}
+      {pendingImages.length > 0 && (
+        <div className="px-4 py-2 flex gap-2 border-t border-gray-800">
+          {pendingImages.map((p, i) => (
+            <div key={i} className="relative">
+              <img src={`data:image/jpeg;base64,${p.b64}`} className="h-16 w-auto rounded border border-gray-700" />
+              <button onClick={() => setPendingImages(prev => prev.filter((_, j) => j !== i))}
+                className="absolute -top-1 -right-1 w-4 h-4 bg-red-600 rounded-full text-xs text-white flex items-center justify-center">
+                ×
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Video Panel */}
+      {showVideoPanel && (
+        <div className="border-t border-gray-800 bg-gray-900 p-4 space-y-4 max-h-[65vh] overflow-y-auto">
+
+          {/* Panel header + mode tabs */}
+          <div className="flex items-center justify-between">
+            <div className="flex gap-1 bg-gray-800 rounded-lg p-1">
+              {([
+                { id: 'analyze', label: '📹 单段分析' },
+                { id: 'compare', label: '📊 两段对比' },
+                { id: 'pro',     label: '🏆 职业对比' },
+              ] as { id: PanelMode; label: string }[]).map(tab => (
+                <button
+                  key={tab.id}
+                  onClick={() => setPanelMode(tab.id)}
+                  className={`px-3 py-1 rounded text-xs font-medium transition-colors
+                    ${panelMode === tab.id
+                      ? 'bg-green-600 text-white'
+                      : 'text-gray-400 hover:text-gray-200'}`}>
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+            <button onClick={() => setShowVideoPanel(false)}
+              className="text-gray-500 hover:text-gray-300 text-lg leading-none ml-2">×</button>
+          </div>
+
+          {/* ── Mode: single analysis ── */}
+          {panelMode === 'analyze' && (
+            <VideoSlot
+              label="① 选择视频"
+              file={videoA} preview={previewA}
+              onSelect={() => fileARef.current?.click()}
+              onClear={() => { setVideoA(null); setPreviewA(null) }}
+              settings={settingsA} onSettingsChange={setSettingsA}
+              videoRef={videoRefA}
+            />
+          )}
+
+          {/* ── Mode: two-video compare ── */}
+          {panelMode === 'compare' && (
+            <div className="grid grid-cols-2 gap-4">
+              <VideoSlot
+                label="① 视频 A（改进前）"
+                file={videoA} preview={previewA}
+                onSelect={() => fileARef.current?.click()}
+                onClear={() => { setVideoA(null); setPreviewA(null) }}
+                settings={settingsA} onSettingsChange={setSettingsA}
+                videoRef={videoRefA}
+              />
+              <VideoSlot
+                label="② 视频 B（改进后）"
+                file={videoB} preview={previewB}
+                onSelect={() => fileBRef.current?.click()}
+                onClear={() => { setVideoB(null); setPreviewB(null) }}
+                settings={settingsB} onSettingsChange={setSettingsB}
+                videoRef={videoRefB}
+              />
+            </div>
+          )}
+
+          {/* ── Mode: pro player compare ── */}
+          {panelMode === 'pro' && (
+            <div className="space-y-4">
+              <VideoSlot
+                label="① 选择你的视频"
+                file={videoA} preview={previewA}
+                onSelect={() => fileARef.current?.click()}
+                onClear={() => { setVideoA(null); setPreviewA(null) }}
+                settings={settingsA} onSettingsChange={setSettingsA}
+                videoRef={videoRefA}
+              />
+
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-gray-400">② 对比方式</p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setRecommendMode(false)}
+                    className={`flex-1 py-2 rounded-lg text-xs font-medium transition-colors
+                      ${!recommendMode ? 'bg-green-700 text-white' : 'bg-gray-800 text-gray-400 hover:text-gray-200'}`}>
+                    选择球员对比
+                  </button>
+                  <button
+                    onClick={() => setRecommendMode(true)}
+                    className={`flex-1 py-2 rounded-lg text-xs font-medium transition-colors
+                      ${recommendMode ? 'bg-green-700 text-white' : 'bg-gray-800 text-gray-400 hover:text-gray-200'}`}>
+                    推荐相似风格
+                  </button>
+                </div>
+
+                {!recommendMode && (
+                  <div className="space-y-2">
+                    <div className="grid grid-cols-2 gap-2">
+                      {proPlayers.map(p => (
+                        <button
+                          key={p.id}
+                          onClick={() => setSelectedPlayer(p.id)}
+                          className={`text-left px-3 py-2 rounded-lg text-xs transition-colors border
+                            ${selectedPlayer === p.id
+                              ? 'border-green-500 bg-green-900/40 text-white'
+                              : 'border-gray-700 bg-gray-800 text-gray-300 hover:border-gray-500'}`}>
+                          <div className="font-medium">{p.name.split(' (')[0]}</div>
+                          <div className="text-gray-500 text-[10px] mt-0.5 leading-tight">{p.style}</div>
+                        </button>
+                      ))}
+                    </div>
+                    {selectedPlayer === '' && (
+                      <p className="text-xs text-yellow-500">请选择一位球员</p>
+                    )}
+                  </div>
+                )}
+
+                {recommendMode && (
+                  <p className="text-xs text-gray-400 bg-gray-800 rounded-lg px-3 py-2">
+                    AI 将分析你的打法特征，推荐最相似的职业球员供你参考学习。
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Submit button */}
+          <button
+            onClick={submitPanel}
+            disabled={!canSubmitPanel || loading || (panelMode === 'pro' && !recommendMode && !selectedPlayer)}
+            className="w-full py-2.5 rounded-xl text-sm font-semibold transition-colors
+              bg-green-600 hover:bg-green-500
+              disabled:bg-gray-700 disabled:text-gray-500 disabled:cursor-not-allowed">
+            {submitLabel()}
+          </button>
+        </div>
+      )}
+
+      {/* Input bar */}
+      <div className="border-t border-gray-800 px-4 py-3 flex gap-2 items-end shrink-0">
+        <button onClick={() => imageInputRef.current?.click()}
+          className="w-9 h-9 rounded-xl bg-gray-800 hover:bg-gray-700 flex items-center justify-center
+            text-gray-400 hover:text-white transition-colors shrink-0" title="上传图片">
+          🖼️
+        </button>
+        <button
+          onClick={() => setShowVideoPanel(v => !v)}
+          className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors shrink-0
+            ${showVideoPanel ? 'bg-green-700 text-white' : 'bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white'}`}
+          title="上传视频">
+          🎬
+        </button>
+
+        <textarea
+          value={inputText}
+          onChange={e => setInputText(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendTextMessage() } }}
+          placeholder="问教练任何网球问题… (Enter 发送)"
+          rows={1}
+          className="flex-1 bg-gray-800 rounded-xl px-4 py-2.5 text-sm text-gray-100
+            placeholder-gray-500 resize-none focus:outline-none focus:ring-1 focus:ring-green-600
+            min-h-[38px] max-h-32 overflow-y-auto"
+          onInput={e => {
+            const t = e.target as HTMLTextAreaElement
+            t.style.height = 'auto'
+            t.style.height = Math.min(t.scrollHeight, 128) + 'px'
+          }}
+        />
+
+        <button
+          onClick={sendTextMessage}
+          disabled={loading || (!inputText.trim() && pendingImages.length === 0)}
+          className="w-9 h-9 rounded-xl bg-green-600 hover:bg-green-500 disabled:bg-gray-700
+            disabled:text-gray-500 flex items-center justify-center transition-colors shrink-0">
+          ➤
+        </button>
+      </div>
+
+      {/* Hidden file inputs */}
+      <input ref={fileARef} type="file" accept="video/*" className="hidden"
+        onChange={e => {
+          const f = e.target.files?.[0]; if (!f) return
+          setVideoA(f); setPreviewA(URL.createObjectURL(f))
+          setShowVideoPanel(true)
+          e.target.value = ''
+        }} />
+      <input ref={fileBRef} type="file" accept="video/*" className="hidden"
+        onChange={e => {
+          const f = e.target.files?.[0]; if (!f) return
+          setVideoB(f); setPreviewB(URL.createObjectURL(f))
+          e.target.value = ''
+        }} />
+      <input ref={imageInputRef} type="file" accept="image/*" multiple className="hidden"
+        onChange={e => { Array.from(e.target.files ?? []).forEach(handleImageSelect); e.target.value = '' }} />
+    </div>
+  )
+}

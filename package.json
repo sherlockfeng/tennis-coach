@@ -1,0 +1,15 @@
+{
+  "name": "video-tennis-coach",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm --parallel -r dev",
+    "build": "pnpm -r build",
+    "install:all": "pnpm install",
+    "test": "pnpm --filter @tennis-coach/agent test",
+    "test:e2e": "pnpm --filter @tennis-coach/web test:e2e"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0"
+  }
+}
