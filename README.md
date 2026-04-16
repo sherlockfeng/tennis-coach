@@ -31,8 +31,8 @@ sudo apt install ffmpeg
 
 ```bash
 # 1. 克隆项目
-git clone https://github.com/sherlockfeng/video-tennis-coach.git
-cd video-tennis-coach
+git clone https://github.com/sherlockfeng/tennis-coach.git
+cd tennis-coach
 
 # 2. 配置环境变量
 cp .env.example .env
@@ -65,7 +65,7 @@ pnpm dev
 ## 项目结构
 
 ```
-video-tennis-coach/
+tennis-coach/
 ├── packages/
 │   ├── web/       # 前端 React + Vite
 │   └── agent/     # 后端 Express API

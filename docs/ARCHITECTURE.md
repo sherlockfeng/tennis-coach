@@ -9,7 +9,7 @@
 ## 项目结构
 
 ```
-video-tennis-coach/
+tennis-coach/
 ├── CLAUDE.md                  ← 导航入口（必读）
 ├── docs/
 │   ├── ARCHITECTURE.md        ← 本文件，架构说明
