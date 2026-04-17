@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express'
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
-import db from '../db.js'
+import pool from '../db.js'
 import { jwtSecret } from '../config.js'
 import { requireAuth, type AuthRequest } from '../middleware/authMiddleware.js'
 
@@ -24,21 +24,22 @@ router.post('/register', async (req: Request, res: Response) => {
     return res.status(400).json({ error: '密码至少需要 6 位' })
   }
 
-  const exists = db.prepare('SELECT id FROM users WHERE email = ?').get(email)
-  if (exists) {
+  const normalized = email.toLowerCase()
+  const exists = await pool.query('SELECT id FROM users WHERE email = $1', [normalized])
+  if (exists.rows.length > 0) {
     return res.status(409).json({ error: '该邮箱已注册' })
   }
 
   const hash = await bcrypt.hash(password, 10)
-  const stmt = db.prepare(
-    'INSERT INTO users (email, password_hash, created_at) VALUES (?, ?, ?)'
+  const result = await pool.query(
+    'INSERT INTO users (email, password_hash, created_at) VALUES ($1, $2, $3) RETURNING id',
+    [normalized, hash, Date.now()]
   )
-  const result = stmt.run(email.toLowerCase(), hash, Date.now())
-  const userId = result.lastInsertRowid as number
+  const userId: number = result.rows[0].id
 
   res.status(201).json({
-    token: signToken(userId, email),
-    user: { id: userId, email, apiKey: '', apiProvider: 'claude' },
+    token: signToken(userId, normalized),
+    user: { id: userId, email: normalized, apiKey: '', apiProvider: 'claude' },
   })
 })
 
@@ -50,9 +51,11 @@ router.post('/login', async (req: Request, res: Response) => {
     return res.status(400).json({ error: '请输入邮箱和密码' })
   }
 
-  const user = db.prepare(
-    'SELECT id, email, password_hash, api_key, api_provider FROM users WHERE email = ?'
-  ).get(email.toLowerCase()) as {
+  const result = await pool.query(
+    'SELECT id, email, password_hash, api_key, api_provider FROM users WHERE email = $1',
+    [email.toLowerCase()]
+  )
+  const user = result.rows[0] as {
     id: number; email: string; password_hash: string
     api_key: string; api_provider: string
   } | undefined
@@ -73,12 +76,12 @@ router.post('/login', async (req: Request, res: Response) => {
 })
 
 // ─── GET /api/auth/me ────────────────────────────────────────────────
-router.get('/me', requireAuth, (req: AuthRequest, res: Response) => {
-  const user = db.prepare(
-    'SELECT id, email, api_key, api_provider FROM users WHERE id = ?'
-  ).get(req.userId) as {
-    id: number; email: string; api_key: string; api_provider: string
-  } | undefined
+router.get('/me', requireAuth, async (req: AuthRequest, res: Response) => {
+  const result = await pool.query(
+    'SELECT id, email, api_key, api_provider FROM users WHERE id = $1',
+    [req.userId]
+  )
+  const user = result.rows[0]
 
   if (!user) {
     return res.status(404).json({ error: '用户不存在' })
@@ -88,15 +91,16 @@ router.get('/me', requireAuth, (req: AuthRequest, res: Response) => {
 })
 
 // ─── PUT /api/auth/api-token ─────────────────────────────────────────
-router.put('/api-token', requireAuth, (req: AuthRequest, res: Response) => {
+router.put('/api-token', requireAuth, async (req: AuthRequest, res: Response) => {
   const { apiKey, apiProvider } = req.body as { apiKey?: string; apiProvider?: string }
 
   const provider = apiProvider === 'openai' ? 'openai' : 'claude'
   const key = (apiKey ?? '').trim()
 
-  db.prepare(
-    'UPDATE users SET api_key = ?, api_provider = ? WHERE id = ?'
-  ).run(key, provider, req.userId)
+  await pool.query(
+    'UPDATE users SET api_key = $1, api_provider = $2 WHERE id = $3',
+    [key, provider, req.userId]
+  )
 
   res.json({ ok: true })
 })

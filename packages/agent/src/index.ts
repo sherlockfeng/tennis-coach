@@ -1,6 +1,7 @@
 import express from 'express'
 import cors from 'cors'
 import { config, validateConfig } from './config.js'
+import { initDb } from './db.js'
 import analyzeRouter from './routes/analyze.js'
 import authRouter from './routes/auth.js'
 
@@ -43,10 +44,17 @@ app.get('/api/health', (_req, res) => {
 app.use('/api/auth', authRouter)
 app.use('/api', analyzeRouter)
 
-app.listen(config.port, () => {
-  console.log(`🎾 Tennis Coach Agent running on http://localhost:${config.port}`)
-  console.log(`   Provider: ${config.provider.toUpperCase()}`)
-  console.log(`   Model:    ${config.provider === 'claude' ? config.claude.model : config.openai.model}`)
-})
+initDb()
+  .then(() => {
+    app.listen(config.port, () => {
+      console.log(`🎾 Tennis Coach Agent running on http://localhost:${config.port}`)
+      console.log(`   Provider: ${config.provider.toUpperCase()}`)
+      console.log(`   Model:    ${config.provider === 'claude' ? config.claude.model : config.openai.model}`)
+    })
+  })
+  .catch(err => {
+    console.error('Failed to initialize database:', err)
+    process.exit(1)
+  })
 
 export { app }

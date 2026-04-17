@@ -75,12 +75,14 @@ src/
 
 ## 认证系统
 
-**技术选型**：SQLite（`better-sqlite3`）+ JWT（`jsonwebtoken`）+ 密码哈希（`bcryptjs`）
+**技术选型**：PostgreSQL（`pg` node-postgres）+ JWT（`jsonwebtoken`）+ 密码哈希（`bcryptjs`）
+
+**连接方式**：通过 `DATABASE_URL` 环境变量（标准 PostgreSQL 连接字符串），使用连接池（`pg.Pool`）。
 
 **新增文件**：
 ```
 packages/agent/src/
-├── db.ts                  ← SQLite 初始化，users 表
+├── db.ts                  ← pg Pool 初始化，initDb() 建表
 ├── middleware/
 │   └── authMiddleware.ts  ← JWT 验证中间件
 └── routes/
@@ -89,13 +91,13 @@ packages/agent/src/
 
 **数据库表**：
 ```sql
-CREATE TABLE users (
-  id           INTEGER PRIMARY KEY AUTOINCREMENT,
-  email        TEXT UNIQUE NOT NULL,
+CREATE TABLE IF NOT EXISTS users (
+  id            SERIAL PRIMARY KEY,
+  email         TEXT UNIQUE NOT NULL,
   password_hash TEXT NOT NULL,
-  api_key      TEXT DEFAULT '',       -- 用户个人 AI API Key
-  api_provider TEXT DEFAULT 'claude', -- 'claude' | 'openai'
-  created_at   INTEGER NOT NULL
+  api_key       TEXT NOT NULL DEFAULT '',
+  api_provider  TEXT NOT NULL DEFAULT 'claude',
+  created_at    BIGINT NOT NULL
 )
 ```
 

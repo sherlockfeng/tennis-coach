@@ -1,24 +1,24 @@
-import Database from 'better-sqlite3'
-import path from 'path'
-import { fileURLToPath } from 'url'
+import pg from 'pg'
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const DB_PATH = process.env.DB_PATH ?? path.join(__dirname, '..', 'tennis-coach.db')
+const { Pool } = pg
 
-const db = new Database(DB_PATH)
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  // Render / Supabase 等云服务需要 SSL，本地开发可不用
+  ssl: process.env.DATABASE_URL?.includes('localhost') ? false : { rejectUnauthorized: false },
+})
 
-// Enable WAL for better concurrent read performance
-db.pragma('journal_mode = WAL')
+export async function initDb() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS users (
+      id            SERIAL PRIMARY KEY,
+      email         TEXT UNIQUE NOT NULL,
+      password_hash TEXT NOT NULL,
+      api_key       TEXT NOT NULL DEFAULT '',
+      api_provider  TEXT NOT NULL DEFAULT 'claude',
+      created_at    BIGINT NOT NULL
+    )
+  `)
+}
 
-db.exec(`
-  CREATE TABLE IF NOT EXISTS users (
-    id            INTEGER PRIMARY KEY AUTOINCREMENT,
-    email         TEXT    UNIQUE NOT NULL,
-    password_hash TEXT    NOT NULL,
-    api_key       TEXT    NOT NULL DEFAULT '',
-    api_provider  TEXT    NOT NULL DEFAULT 'claude',
-    created_at    INTEGER NOT NULL
-  )
-`)
-
-export default db
+export default pool
