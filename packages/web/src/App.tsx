@@ -1,6 +1,10 @@
 import { useState, useRef, useEffect } from 'react'
 import axios from 'axios'
 
+// In production VITE_API_BASE points to the Render backend URL.
+// In development it's empty, so requests go through the Vite proxy.
+const api = axios.create({ baseURL: import.meta.env.VITE_API_BASE ?? '' })
+
 // ─── Types ───────────────────────────────────────────────────────────
 
 interface UserSettings {
@@ -230,7 +234,7 @@ export default function App() {
 
   // Fetch pro players list on mount
   useEffect(() => {
-    axios.get<{ players: ProPlayer[] }>('/api/compare/players')
+    api.get<{ players: ProPlayer[] }>("/api/compare/players")
       .then(r => setProPlayers(r.data.players))
       .catch(() => {})
   }, [])
@@ -266,14 +270,14 @@ export default function App() {
         snapshot.forEach(p => fd.append('images', p.file))
         fd.append('text', userMsg.content)
         fd.append('history', JSON.stringify(apiHistory))
-        const res = await axios.post('/api/chat/image', fd, {
+        const res = await api.post('/api/chat/image', fd, {
           headers: { 'Content-Type': 'multipart/form-data', ...apiHeaders },
         })
         reply = res.data.reply
         newHistory = res.data.updatedHistory
       } else {
         const hist = [...apiHistory, { role: 'user' as const, content: text }]
-        const res = await axios.post('/api/chat', { messages: hist }, { headers: apiHeaders })
+        const res = await api.post('/api/chat', { messages: hist }, { headers: apiHeaders })
         reply = res.data.reply
         newHistory = [...hist, { role: 'assistant' as const, content: reply }]
       }
@@ -304,7 +308,7 @@ export default function App() {
       fd.append('fps', String(settingsA.fps))
       fd.append('history', JSON.stringify(apiHistory))
 
-      const res = await axios.post('/api/analyze', fd, {
+      const res = await api.post('/api/analyze', fd, {
         headers: { 'Content-Type': 'multipart/form-data', ...apiHeaders }, timeout: 120_000,
       })
 
@@ -355,7 +359,7 @@ export default function App() {
 
       fd.append('history', JSON.stringify(apiHistory))
 
-      const res = await axios.post('/api/compare', fd, {
+      const res = await api.post('/api/compare', fd, {
         headers: { 'Content-Type': 'multipart/form-data', ...apiHeaders }, timeout: 180_000,
       })
 
