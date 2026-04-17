@@ -3,9 +3,11 @@ import { config } from '../config.js'
 import { TENNIS_COACH_SYSTEM_PROMPT } from './systemPrompt.js'
 import type { ChatMessage } from './claude.js'
 
-const client = new OpenAI({ apiKey: config.openai.apiKey })
+// Default client using server-configured key (may be empty if server runs in BYOK-only mode)
+const defaultClient = new OpenAI({ apiKey: config.openai.apiKey || 'placeholder' })
 
-export async function chatWithOpenAI(messages: ChatMessage[]): Promise<string> {
+export async function chatWithOpenAI(messages: ChatMessage[], apiKey?: string): Promise<string> {
+  const client = apiKey ? new OpenAI({ apiKey }) : defaultClient
   const formatted: OpenAI.ChatCompletionMessageParam[] = [
     { role: 'system', content: TENNIS_COACH_SYSTEM_PROMPT },
     ...messages.map((msg): OpenAI.ChatCompletionMessageParam => {

@@ -3,6 +3,25 @@ import axios from 'axios'
 
 // ─── Types ───────────────────────────────────────────────────────────
 
+interface UserSettings {
+  provider: 'claude' | 'openai'
+  apiKey: string
+}
+
+const SETTINGS_KEY = 'tc_user_settings'
+
+function loadSettings(): UserSettings {
+  try {
+    const raw = localStorage.getItem(SETTINGS_KEY)
+    if (raw) return JSON.parse(raw) as UserSettings
+  } catch {}
+  return { provider: 'claude', apiKey: '' }
+}
+
+function saveSettings(s: UserSettings) {
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify(s))
+}
+
 export interface ChatMessage {
   role: 'user' | 'assistant'
   content: string
@@ -150,6 +169,17 @@ function VideoSlot({
 const DEFAULT_SETTINGS: FrameSettings = { startSec: 0, endSec: 10, fps: 2, videoDuration: 10 }
 
 export default function App() {
+  // ── User settings (BYOK) ────────────────────────────────────────
+  const [settings, setSettings] = useState<UserSettings>(loadSettings)
+  const [showSettings, setShowSettings] = useState(false)
+  const [draftSettings, setDraftSettings] = useState<UserSettings>(loadSettings)
+  const [showKey, setShowKey] = useState(false)
+
+  // Build axios headers for every API call
+  const apiHeaders = settings.apiKey
+    ? { 'X-API-Key': settings.apiKey, 'X-AI-Provider': settings.provider }
+    : {}
+
   const [messages, setMessages] = useState<ChatMessage[]>([{
     role: 'assistant',
     content: '你好！我是你的 AI 网球教练 🎾\n\n你可以：\n• 直接发消息提问\n• 上传图片分析动作\n• 上传视频逐帧分析\n• 两段视频对比（改进前后）\n• 与职业球员对比，或推荐相似风格球员',
@@ -230,13 +260,13 @@ export default function App() {
         fd.append('text', userMsg.content)
         fd.append('history', JSON.stringify(apiHistory))
         const res = await axios.post('/api/chat/image', fd, {
-          headers: { 'Content-Type': 'multipart/form-data' },
+          headers: { 'Content-Type': 'multipart/form-data', ...apiHeaders },
         })
         reply = res.data.reply
         newHistory = res.data.updatedHistory
       } else {
         const hist = [...apiHistory, { role: 'user' as const, content: text }]
-        const res = await axios.post('/api/chat', { messages: hist })
+        const res = await axios.post('/api/chat', { messages: hist }, { headers: apiHeaders })
         reply = res.data.reply
         newHistory = [...hist, { role: 'assistant' as const, content: reply }]
       }
@@ -268,7 +298,7 @@ export default function App() {
       fd.append('history', JSON.stringify(apiHistory))
 
       const res = await axios.post('/api/analyze', fd, {
-        headers: { 'Content-Type': 'multipart/form-data' }, timeout: 120_000,
+        headers: { 'Content-Type': 'multipart/form-data', ...apiHeaders }, timeout: 120_000,
       })
 
       addMessage({ role: 'assistant', content: res.data.analysis, frames: res.data.frames, isAnalysis: true })
@@ -319,7 +349,7 @@ export default function App() {
       fd.append('history', JSON.stringify(apiHistory))
 
       const res = await axios.post('/api/compare', fd, {
-        headers: { 'Content-Type': 'multipart/form-data' }, timeout: 180_000,
+        headers: { 'Content-Type': 'multipart/form-data', ...apiHeaders }, timeout: 180_000,
       })
 
       addMessage({ role: 'assistant', content: res.data.analysis, frames: res.data.framesA, isAnalysis: true })
@@ -376,7 +406,91 @@ export default function App() {
           className="text-xs text-gray-500 hover:text-gray-300 transition-colors">
           新对话
         </button>
+        <button
+          onClick={() => { setDraftSettings({ ...settings }); setShowSettings(true) }}
+          title="API Key 设置"
+          className={`w-8 h-8 rounded-lg flex items-center justify-center text-base transition-colors
+            ${settings.apiKey ? 'bg-green-900/50 text-green-400' : 'bg-gray-800 text-gray-500 hover:text-gray-300'}`}>
+          ⚙️
+        </button>
       </header>
+
+      {/* Settings Modal */}
+      {showSettings && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
+          <div className="bg-gray-900 border border-gray-700 rounded-2xl p-6 w-full max-w-sm space-y-5">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-bold text-white">API Key 设置</h2>
+              <button onClick={() => setShowSettings(false)} className="text-gray-500 hover:text-gray-300 text-lg">×</button>
+            </div>
+
+            <p className="text-xs text-gray-400 leading-relaxed">
+              Key 仅保存在你的浏览器本地，不会上传到服务器。
+            </p>
+
+            {/* Provider */}
+            <div className="space-y-1.5">
+              <p className="text-xs text-gray-400 font-medium">AI 提供商</p>
+              <div className="flex gap-2">
+                {(['claude', 'openai'] as const).map(p => (
+                  <button key={p} onClick={() => setDraftSettings(d => ({ ...d, provider: p }))}
+                    className={`flex-1 py-2 rounded-lg text-xs font-medium transition-colors
+                      ${draftSettings.provider === p
+                        ? 'bg-green-700 text-white'
+                        : 'bg-gray-800 text-gray-400 hover:text-gray-200'}`}>
+                    {p === 'claude' ? '🤖 Claude' : '🧠 OpenAI'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* API Key input */}
+            <div className="space-y-1.5">
+              <p className="text-xs text-gray-400 font-medium">
+                {draftSettings.provider === 'claude' ? 'Anthropic API Key' : 'OpenAI API Key'}
+              </p>
+              <div className="flex gap-2">
+                <input
+                  type={showKey ? 'text' : 'password'}
+                  value={draftSettings.apiKey}
+                  onChange={e => setDraftSettings(d => ({ ...d, apiKey: e.target.value }))}
+                  placeholder={draftSettings.provider === 'claude' ? 'sk-ant-...' : 'sk-...'}
+                  className="flex-1 bg-gray-800 rounded-lg px-3 py-2 text-sm text-gray-100
+                    placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-green-600 font-mono"
+                />
+                <button onClick={() => setShowKey(v => !v)}
+                  className="px-3 rounded-lg bg-gray-800 text-gray-400 hover:text-gray-200 text-sm">
+                  {showKey ? '🙈' : '👁️'}
+                </button>
+              </div>
+              {draftSettings.apiKey && (
+                <p className="text-xs text-green-500">✓ 已填写，将使用你自己的 Key</p>
+              )}
+              {!draftSettings.apiKey && (
+                <p className="text-xs text-yellow-600">留空则使用服务器内置 Key（如有）</p>
+              )}
+            </div>
+
+            {/* Actions */}
+            <div className="flex gap-2 pt-1">
+              <button
+                onClick={() => setDraftSettings(d => ({ ...d, apiKey: '' }))}
+                className="flex-1 py-2 rounded-xl text-xs text-gray-500 hover:text-red-400 bg-gray-800 transition-colors">
+                清除 Key
+              </button>
+              <button
+                onClick={() => {
+                  saveSettings(draftSettings)
+                  setSettings(draftSettings)
+                  setShowSettings(false)
+                }}
+                className="flex-1 py-2 rounded-xl text-sm font-semibold bg-green-600 hover:bg-green-500 text-white transition-colors">
+                保存
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">

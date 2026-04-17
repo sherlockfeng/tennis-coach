@@ -3,10 +3,32 @@ import multer from 'multer'
 import path from 'path'
 import os from 'os'
 import { extractFrames, cleanupTmpDir } from '../services/frameExtractor.js'
-import { chat, type ChatMessage } from '../services/aiProvider.js'
-import { config } from '../config.js'
+import { chat, type ChatMessage, type ChatOptions } from '../services/aiProvider.js'
+import { config, type AIProvider } from '../config.js'
 
 const router = Router()
+
+/**
+ * Resolve per-request AI credentials.
+ *
+ * Priority: request header > server env key
+ *
+ * Headers:
+ *   X-API-Key      — user's own API key (BYOK)
+ *   X-AI-Provider  — "claude" | "openai"  (optional, defaults to server config)
+ *
+ * Returns null when no key is available at all (caller should respond 401).
+ */
+function resolveChat(req: Request): ChatOptions | null {
+  const headerKey      = (req.headers['x-api-key']     as string | undefined)?.trim() || undefined
+  const headerProvider = (req.headers['x-ai-provider'] as string | undefined)?.trim() as AIProvider | undefined
+
+  const provider = headerProvider ?? config.provider
+  const apiKey   = headerKey ?? (provider === 'claude' ? config.claude.apiKey : config.openai.apiKey)
+
+  if (!apiKey) return null   // no key at all — reject
+  return { provider, apiKey: headerKey }  // apiKey=undefined means "use server default"
+}
 
 // Multer: store uploads in temp dir
 const upload = multer({
@@ -26,6 +48,9 @@ router.post('/analyze', upload.single('video'), async (req: Request, res: Respon
   let tmpDir: string | null = null
 
   try {
+    const chatOptions = resolveChat(req)
+    if (!chatOptions) return res.status(401).json({ error: '请先在设置中填写 API Key' })
+
     if (!req.file) {
       return res.status(400).json({ error: 'No video file uploaded' })
     }
@@ -54,7 +79,7 @@ router.post('/analyze', upload.single('video'), async (req: Request, res: Respon
     }
 
     const messages: ChatMessage[] = [...history, userMsg]
-    const analysis = await chat(messages)
+    const analysis = await chat(messages, chatOptions)
 
     res.json({
       frames: extraction.frames,
@@ -84,12 +109,15 @@ router.post('/analyze', upload.single('video'), async (req: Request, res: Respon
 // Body (JSON): { messages: ChatMessage[] }
 router.post('/chat', async (req: Request, res: Response) => {
   try {
+    const chatOptions = resolveChat(req)
+    if (!chatOptions) return res.status(401).json({ error: '请先在设置中填写 API Key' })
+
     const { messages } = req.body as { messages: ChatMessage[] }
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       return res.status(400).json({ error: 'messages array is required' })
     }
 
-    const reply = await chat(messages)
+    const reply = await chat(messages, chatOptions)
 
     res.json({
       reply,
@@ -115,6 +143,9 @@ const uploadImage = multer({
 router.post('/chat/image', uploadImage.array('images', 10), async (req: Request, res: Response) => {
   const files = (req.files ?? []) as Express.Multer.File[]
   try {
+    const chatOptions = resolveChat(req)
+    if (!chatOptions) return res.status(401).json({ error: '请先在设置中填写 API Key' })
+
     if (files.length === 0) {
       return res.status(400).json({ error: 'No images uploaded' })
     }
@@ -135,7 +166,7 @@ router.post('/chat/image', uploadImage.array('images', 10), async (req: Request,
     }
 
     const messages: ChatMessage[] = [...history, userMsg]
-    const reply = await chat(messages)
+    const reply = await chat(messages, chatOptions)
 
     res.json({
       reply,
@@ -203,6 +234,9 @@ router.post(
     const uploadedFiles: string[] = []
 
     try {
+      const chatOptions = resolveChat(req)
+      if (!chatOptions) return res.status(401).json({ error: '请先在设置中填写 API Key' })
+
       const files = req.files as Record<string, Express.Multer.File[]>
       const fileA = files?.videoA?.[0]
       const fileB = files?.videoB?.[0]
@@ -286,7 +320,7 @@ router.post(
       }
 
       const messages: ChatMessage[] = [...history, userMsg]
-      const analysis = await chat(messages)
+      const analysis = await chat(messages, chatOptions)
 
       res.json({
         analysis,
