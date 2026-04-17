@@ -30,11 +30,18 @@ export interface ChatMessage {
   isAnalysis?: boolean
 }
 
-interface FrameSettings {
+export interface FrameSettings {
   startSec: number
   endSec: number
   fps: number
   videoDuration: number
+}
+
+export interface AnalysisResult {
+  provider: string
+  frameCount: number
+  frames: string[]
+  analysis: string
 }
 
 interface ProPlayer {
