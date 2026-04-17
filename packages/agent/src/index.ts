@@ -2,6 +2,7 @@ import express from 'express'
 import cors from 'cors'
 import { config, validateConfig } from './config.js'
 import analyzeRouter from './routes/analyze.js'
+import authRouter from './routes/auth.js'
 
 validateConfig()
 
@@ -39,6 +40,7 @@ app.get('/api/health', (_req, res) => {
   })
 })
 
+app.use('/api/auth', authRouter)
 app.use('/api', analyzeRouter)
 
 app.listen(config.port, () => {

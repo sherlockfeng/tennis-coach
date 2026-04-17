@@ -17,6 +17,9 @@ export const config = {
   },
 }
 
+// JWT signing secret — set JWT_SECRET in .env for production
+export const jwtSecret = process.env.JWT_SECRET ?? 'tennis-coach-dev-secret-change-in-production'
+
 export function validateConfig() {
   // In BYOK mode (BYOK_ONLY=true) server keys are optional — users supply their own.
   // In normal mode at least one key must be present.

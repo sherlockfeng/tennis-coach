@@ -73,6 +73,39 @@ src/
 
 ---
 
+## 认证系统
+
+**技术选型**：SQLite（`better-sqlite3`）+ JWT（`jsonwebtoken`）+ 密码哈希（`bcryptjs`）
+
+**新增文件**：
+```
+packages/agent/src/
+├── db.ts                  ← SQLite 初始化，users 表
+├── middleware/
+│   └── authMiddleware.ts  ← JWT 验证中间件
+└── routes/
+    └── auth.ts            ← 注册/登录/Profile/Token CRUD
+```
+
+**数据库表**：
+```sql
+CREATE TABLE users (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  email        TEXT UNIQUE NOT NULL,
+  password_hash TEXT NOT NULL,
+  api_key      TEXT DEFAULT '',       -- 用户个人 AI API Key
+  api_provider TEXT DEFAULT 'claude', -- 'claude' | 'openai'
+  created_at   INTEGER NOT NULL
+)
+```
+
+**JWT**：
+- 签发后有效期 30 天
+- Payload: `{ userId, email }`
+- 客户端存 `localStorage`，请求头带 `Authorization: Bearer <token>`
+
+---
+
 ## API 接口
 
 | 方法 | 路径 | 说明 | 文件上传字段 |
@@ -83,6 +116,10 @@ src/
 | POST | `/api/analyze` | 视频帧提取 + 分析 | `video` |
 | GET | `/api/compare/players` | 获取职业球员列表 | — |
 | POST | `/api/compare` | 两段视频对比 或 职业球员对比 | `videoA`, `videoB`（可选） |
+| POST | `/api/auth/register` | 注册（email + password） | — |
+| POST | `/api/auth/login` | 登录，返回 JWT | — |
+| GET | `/api/auth/me` | 获取当前用户信息（需 JWT） | — |
+| PUT | `/api/auth/api-token` | 更新/保存个人 API Token（需 JWT） | — |
 
 **`/api/compare` 三种模式**（通过请求字段区分）：
 - `videoA` + `videoB` → 两段视频对比
