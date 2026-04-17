@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeAll } from 'vitest'
 import request from 'supertest'
+import type { Application } from 'express'
 
 // Mock AI providers so tests don't hit real APIs
 vi.mock('../services/aiProvider.js', () => ({
@@ -16,7 +17,7 @@ vi.mock('../services/frameExtractor.js', () => ({
   cleanupTmpDir: vi.fn().mockResolvedValue(undefined),
 }))
 
-let app: Express.Application
+let app: Application
 
 beforeAll(async () => {
   process.env.AI_PROVIDER = 'claude'
