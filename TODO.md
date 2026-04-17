@@ -52,6 +52,7 @@
 - [x] 后端 systemPrompt 内容完整性测试
 - [x] 后端 /chat 路由正常 + 异常响应测试
 - [x] 前端 E2E：布局渲染、消息发送、视频面板开关、新对话重置
+- [x] routes.test.ts 类型修复（Express.Application → import type Application）
 - [ ] 后端 /analyze：损坏视频文件的错误处理
 - [ ] 后端 /analyze：startSec >= endSec 非法参数
 - [ ] 后端 /analyze：视频时长 0 秒或极短
@@ -63,3 +64,8 @@
 - [ ] 前端 E2E：职业球员选择 + 提交
 - [ ] 前端 E2E：API 超时时错误提示展示
 - [ ] 前端 E2E：loading 期间按钮禁用，防止重复提交
+- [ ] 后端 BYOK：无 Header 且无服务器 key 时返回 401
+- [ ] 后端 BYOK：有效 X-API-Key Header 正常调用
+- [ ] 后端 BYOK：Header key 优先于服务器 env key
+- [ ] 前端 E2E：设置面板打开/保存/清除 Key 流程
+- [ ] 前端 E2E：无 key 时收到 401 后展示错误提示

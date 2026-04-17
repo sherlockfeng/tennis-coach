@@ -33,9 +33,11 @@ pnpm --filter @tennis-coach/agent test:watch  # 监听模式
 
 | 文件 | 覆盖范围 |
 |------|----------|
-| `config.test.ts` | 环境变量校验、缺 key 时抛错 |
+| `config.test.ts` | 环境变量校验、缺 key 时抛错；BYOK_ONLY 模式下跳过校验 |
 | `systemPrompt.test.ts` | Prompt 内容完整性（球员知识、器材建议等） |
-| `routes.test.ts` | API 路由正常/异常响应，mock AI 和 ffmpeg |
+| `routes.test.ts` | API 路由正常/异常响应，mock AI 和 ffmpeg；BYOK Header 鉴权 |
+
+**注意**：`routes.test.ts` 的类型声明须用 `import type { Application } from 'express'`，不可用 `Express.Application` 全局命名空间（Docker tsc 构建会报错，本地 Vitest 用 tsx 运行时不会暴露）。
 
 **新增测试文件命名规范**：`<模块名>.test.ts`，放在同一目录。
 
@@ -82,6 +84,13 @@ pnpm --filter @tennis-coach/web test:e2e:ui    # 可视化调试
 - API 超时（模拟 30s+ 无响应）
 - API 返回空内容
 - 网络断开
+
+**BYOK（用户自带 Key）层**
+- 请求不带 `X-API-Key` Header 且服务器无兜底 key → 应返回 401
+- 带有效 `X-API-Key` → 应正常调用
+- 带无效 `X-API-Key`（格式错误）→ AI provider 返回 401，后端应透传错误
+- `X-AI-Provider` 传 `openai` 但 key 是 Claude 格式 → AI provider 报错，后端应透传
+- Header key 优先于服务器 env key（覆盖验证）
 
 **前端层**
 - 发送按钮在 loading 时被连续点击
