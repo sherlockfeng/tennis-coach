@@ -1,0 +1,25 @@
+# Dependencies
+node_modules
+packages/*/node_modules
+.pnpm-store
+
+# Frontend (not needed in backend image)
+packages/web
+
+# Env files
+.env
+.env.local
+.env.*.local
+
+# Build artifacts
+packages/*/dist
+
+# Git
+.git
+.gitignore
+.claude
+
+# Misc
+*.md
+README.md
+docs
