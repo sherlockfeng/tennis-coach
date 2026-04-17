@@ -12,7 +12,15 @@ interface UserSettings {
   apiKey: string
 }
 
+interface AuthUser {
+  id: number
+  email: string
+  apiKey: string
+  apiProvider: 'claude' | 'openai'
+}
+
 const SETTINGS_KEY = 'tc_user_settings'
+const AUTH_KEY = 'tc_auth'
 
 function loadSettings(): UserSettings {
   try {
@@ -24,6 +32,108 @@ function loadSettings(): UserSettings {
 
 function saveSettings(s: UserSettings) {
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(s))
+}
+
+function loadAuth(): { token: string; user: AuthUser } | null {
+  try {
+    const raw = localStorage.getItem(AUTH_KEY)
+    if (raw) return JSON.parse(raw)
+  } catch {}
+  return null
+}
+
+function saveAuth(token: string, user: AuthUser) {
+  localStorage.setItem(AUTH_KEY, JSON.stringify({ token, user }))
+}
+
+function clearAuth() {
+  localStorage.removeItem(AUTH_KEY)
+}
+
+// ─── LoginModal ──────────────────────────────────────────────────────
+
+function LoginModal({
+  onClose,
+  onSuccess,
+}: {
+  onClose: () => void
+  onSuccess: (token: string, user: AuthUser) => void
+}) {
+  const [mode, setMode] = useState<'login' | 'register'>('login')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  const submit = async () => {
+    setError('')
+    setLoading(true)
+    try {
+      const endpoint = mode === 'login' ? '/api/auth/login' : '/api/auth/register'
+      const res = await api.post<{ token: string; user: AuthUser }>(endpoint, { email, password })
+      onSuccess(res.data.token, res.data.user)
+    } catch (err: unknown) {
+      const msg = axios.isAxiosError(err) ? (err.response?.data?.error ?? err.message) : String(err)
+      setError(msg)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
+      <div className="bg-gray-900 border border-gray-700 rounded-2xl p-6 w-full max-w-sm space-y-5">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-bold text-white">
+            {mode === 'login' ? '登录账号' : '注册账号'}
+          </h2>
+          <button onClick={onClose} className="text-gray-500 hover:text-gray-300 text-lg">×</button>
+        </div>
+
+        <p className="text-xs text-gray-400 leading-relaxed">
+          {mode === 'login'
+            ? '登录后可将 API Key 绑定到账号，换设备也能直接使用。'
+            : '注册后可保存你的 API Key 和网球数据到账号。'}
+        </p>
+
+        <div className="space-y-3">
+          <input
+            type="email"
+            value={email}
+            onChange={e => setEmail(e.target.value)}
+            placeholder="邮箱"
+            className="w-full bg-gray-800 rounded-lg px-3 py-2 text-sm text-gray-100
+              placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-green-600"
+          />
+          <input
+            type="password"
+            value={password}
+            onChange={e => setPassword(e.target.value)}
+            placeholder="密码（至少 6 位）"
+            onKeyDown={e => { if (e.key === 'Enter') submit() }}
+            className="w-full bg-gray-800 rounded-lg px-3 py-2 text-sm text-gray-100
+              placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-green-600"
+          />
+        </div>
+
+        {error && <p className="text-xs text-red-400">{error}</p>}
+
+        <button
+          onClick={submit}
+          disabled={loading || !email || !password}
+          className="w-full py-2.5 rounded-xl text-sm font-semibold bg-green-600 hover:bg-green-500
+            disabled:bg-gray-700 disabled:text-gray-500 transition-colors">
+          {loading ? '请稍候…' : mode === 'login' ? '登录' : '注册'}
+        </button>
+
+        <button
+          onClick={() => { setMode(m => m === 'login' ? 'register' : 'login'); setError('') }}
+          className="w-full text-xs text-gray-500 hover:text-gray-300 transition-colors">
+          {mode === 'login' ? '还没有账号？点击注册' : '已有账号？点击登录'}
+        </button>
+      </div>
+    </div>
+  )
 }
 
 export interface ChatMessage {
@@ -180,11 +290,58 @@ function VideoSlot({
 const DEFAULT_SETTINGS: FrameSettings = { startSec: 0, endSec: 10, fps: 2, videoDuration: 10 }
 
 export default function App() {
+  // ── Auth ────────────────────────────────────────────────────────
+  const [authToken, setAuthToken] = useState<string | null>(() => loadAuth()?.token ?? null)
+  const [authUser, setAuthUser] = useState<AuthUser | null>(() => loadAuth()?.user ?? null)
+  const [showLogin, setShowLogin] = useState(false)
+
+  const handleAuthSuccess = (token: string, user: AuthUser) => {
+    saveAuth(token, user)
+    setAuthToken(token)
+    setAuthUser(user)
+    setShowLogin(false)
+    // Auto-populate settings from the account's saved API key
+    if (user.apiKey) {
+      const s: UserSettings = { provider: user.apiProvider, apiKey: user.apiKey }
+      saveSettings(s)
+      setSettings(s)
+      setDraftSettings(s)
+    }
+  }
+
+  const handleLogout = () => {
+    clearAuth()
+    setAuthToken(null)
+    setAuthUser(null)
+  }
+
   // ── User settings (BYOK) ────────────────────────────────────────
   const [settings, setSettings] = useState<UserSettings>(loadSettings)
   const [showSettings, setShowSettings] = useState(false)
   const [draftSettings, setDraftSettings] = useState<UserSettings>(loadSettings)
   const [showKey, setShowKey] = useState(false)
+  const [syncingToken, setSyncingToken] = useState(false)
+  const [syncMsg, setSyncMsg] = useState('')
+
+  const syncTokenToAccount = async () => {
+    if (!authToken) return
+    setSyncingToken(true)
+    setSyncMsg('')
+    try {
+      await api.put('/api/auth/api-token',
+        { apiKey: draftSettings.apiKey, apiProvider: draftSettings.provider },
+        { headers: { Authorization: `Bearer ${authToken}` } }
+      )
+      const updatedUser = { ...authUser!, apiKey: draftSettings.apiKey, apiProvider: draftSettings.provider }
+      saveAuth(authToken, updatedUser)
+      setAuthUser(updatedUser)
+      setSyncMsg('已同步到账号')
+    } catch {
+      setSyncMsg('同步失败，请重试')
+    } finally {
+      setSyncingToken(false)
+    }
+  }
 
   // Build axios headers for every API call
   const apiHeaders = settings.apiKey
@@ -402,6 +559,11 @@ export default function App() {
   // ── Render ────────────────────────────────────────────────────────
   return (
     <div className="flex flex-col h-screen">
+      {/* Auth modal */}
+      {showLogin && (
+        <LoginModal onClose={() => setShowLogin(false)} onSuccess={handleAuthSuccess} />
+      )}
+
       {/* Header */}
       <header className="border-b border-gray-800 px-4 py-3 flex items-center gap-3 shrink-0">
         <span className="text-xl">🎾</span>
@@ -417,8 +579,30 @@ export default function App() {
           className="text-xs text-gray-500 hover:text-gray-300 transition-colors">
           新对话
         </button>
+
+        {/* Auth button */}
+        {authUser ? (
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-400 max-w-[100px] truncate" title={authUser.email}>
+              {authUser.email}
+            </span>
+            <button
+              onClick={handleLogout}
+              className="text-xs text-gray-500 hover:text-red-400 transition-colors">
+              退出
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => setShowLogin(true)}
+            className="text-xs text-gray-400 hover:text-green-400 transition-colors px-2 py-1
+              rounded-lg bg-gray-800 hover:bg-gray-700">
+            登录
+          </button>
+        )}
+
         <button
-          onClick={() => { setDraftSettings({ ...settings }); setShowSettings(true) }}
+          onClick={() => { setDraftSettings({ ...settings }); setSyncMsg(''); setShowSettings(true) }}
           title="API Key 设置"
           className={`w-8 h-8 rounded-lg flex items-center justify-center text-base transition-colors
             ${settings.apiKey ? 'bg-green-900/50 text-green-400' : 'bg-gray-800 text-gray-500 hover:text-gray-300'}`}>
@@ -481,6 +665,24 @@ export default function App() {
                 <p className="text-xs text-yellow-600">留空则使用服务器内置 Key（如有）</p>
               )}
             </div>
+
+            {/* Sync to account (shown only when logged in) */}
+            {authUser && (
+              <div className="space-y-1.5">
+                <button
+                  onClick={syncTokenToAccount}
+                  disabled={syncingToken}
+                  className="w-full py-2 rounded-xl text-xs font-medium bg-gray-800
+                    text-gray-300 hover:text-green-400 hover:bg-gray-700 disabled:opacity-50 transition-colors">
+                  {syncingToken ? '同步中…' : '同步 Key 到账号'}
+                </button>
+                {syncMsg && (
+                  <p className={`text-xs text-center ${syncMsg.includes('失败') ? 'text-red-400' : 'text-green-400'}`}>
+                    {syncMsg}
+                  </p>
+                )}
+              </div>
+            )}
 
             {/* Actions */}
             <div className="flex gap-2 pt-1">
