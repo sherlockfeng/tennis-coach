@@ -23,7 +23,7 @@ export async function uploadFrames(
   if (!base || !key || frames.length === 0) return []
 
   const urls: string[] = []
-  const indices = selectIndices(frames.length, 8) // upload at most 8 key frames
+  const indices = selectIndices(frames.length, 50) // upload all frames (up to 50)
 
   for (const i of indices) {
     try {
