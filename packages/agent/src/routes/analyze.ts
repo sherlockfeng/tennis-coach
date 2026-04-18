@@ -25,7 +25,8 @@ const router = Router()
 function resolveChat(req: Request): ChatOptions | null {
   const headerKey      = (req.headers['x-api-key']      as string | undefined)?.trim() || undefined
   const headerProvider = (req.headers['x-ai-provider']  as string | undefined)?.trim() as AIProvider | undefined
-  const coachStyle     = (req.headers['x-coach-style']  as string | undefined)?.trim() || undefined
+  const rawCoachStyle  = (req.headers['x-coach-style']  as string | undefined)?.trim()
+  const coachStyle     = rawCoachStyle ? decodeURIComponent(rawCoachStyle) : undefined
 
   const provider = headerProvider ?? config.provider
   const apiKey   = headerKey ?? (provider === 'claude' ? config.claude.apiKey : config.openai.apiKey)

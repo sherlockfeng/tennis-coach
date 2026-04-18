@@ -4,7 +4,7 @@ import { test, expect } from '@playwright/test'
 
 test('shows header with coach title', async ({ page }) => {
   await page.goto('/')
-  await expect(page.getByText('AI 网球教练')).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'AI 网球教练' })).toBeVisible()
 })
 
 test('shows welcome message from coach on load', async ({ page }) => {
@@ -81,15 +81,15 @@ test('clicking video button toggles the video panel', async ({ page }) => {
   const videoBtn = page.locator('button[title="上传视频"]')
 
   // Panel not visible initially
-  await expect(page.getByText('视频分析设置')).not.toBeVisible()
+  await expect(page.getByText('单段分析')).not.toBeVisible()
 
   // Click to open
   await videoBtn.click()
-  await expect(page.getByText('视频分析设置')).toBeVisible()
+  await expect(page.getByText('单段分析')).toBeVisible()
 
   // Click to close
   await videoBtn.click()
-  await expect(page.getByText('视频分析设置')).not.toBeVisible()
+  await expect(page.getByText('单段分析')).not.toBeVisible()
 })
 
 // ─── New Conversation ────────────────────────────────────────────────

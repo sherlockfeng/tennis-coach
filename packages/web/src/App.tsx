@@ -375,7 +375,7 @@ export default function App() {
   const [showKey, setShowKey] = useState(false)
   const [syncingToken, setSyncingToken] = useState(false)
   const [syncMsg, setSyncMsg] = useState('')
-  const [coachStyle, setCoachStyle] = useState('')
+  const [coachStyle, setCoachStyle] = useState(() => loadAuth()?.user.coachStyle ?? '')
   const [draftCoachPreset, setDraftCoachPreset] = useState('balanced')
   const [draftCoachCustom, setDraftCoachCustom] = useState('')
   const [savingStyle, setSavingStyle] = useState(false)
@@ -425,7 +425,7 @@ export default function App() {
     ...(settings.apiKey ? { 'X-API-Key': settings.apiKey, 'X-AI-Provider': settings.provider } : {}),
     ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
     ...(currentSessionId ? { 'X-Session-Id': String(currentSessionId) } : {}),
-    ...(coachStyle ? { 'X-Coach-Style': coachStyle } : {}),
+    ...(coachStyle ? { 'X-Coach-Style': encodeURIComponent(coachStyle) } : {}),
   }
 
   const [messages, setMessages] = useState<ChatMessage[]>([{
