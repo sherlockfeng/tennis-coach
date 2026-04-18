@@ -4,6 +4,8 @@ import { config, validateConfig } from './config.js'
 import { initDb } from './db.js'
 import analyzeRouter from './routes/analyze.js'
 import authRouter from './routes/auth.js'
+import sessionsRouter from './routes/sessions.js'
+import profileRouter from './routes/profile.js'
 
 validateConfig()
 
@@ -42,6 +44,8 @@ app.get('/api/health', (_req, res) => {
 })
 
 app.use('/api/auth', authRouter)
+app.use('/api/sessions', sessionsRouter)
+app.use('/api/profile', profileRouter)
 app.use('/api', analyzeRouter)
 
 initDb()

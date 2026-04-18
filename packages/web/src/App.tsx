@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import axios from 'axios'
+import HistorySidebar, { type LoadedSession } from './components/HistorySidebar.js'
 
 // In production VITE_API_BASE points to the Render backend URL.
 // In development it's empty, so requests go through the Vite proxy.
@@ -189,10 +190,11 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
           <div>
             <p className="text-xs text-gray-500 mb-1">已提取 {msg.frames.length} 帧</p>
             <div className="flex flex-wrap gap-1">
-              {msg.frames.map((f, i) => (
-                <img key={i} src={`data:image/jpeg;base64,${f}`}
+              {msg.frames.map((f, i) => {
+                const src = f.startsWith('http') ? f : `data:image/jpeg;base64,${f}`
+                return <img key={i} src={src}
                   className="h-16 w-auto rounded border border-gray-700 object-cover" />
-              ))}
+              })}
             </div>
           </div>
         )}
@@ -343,10 +345,16 @@ export default function App() {
     }
   }
 
+  // ── Session / History ──────────────────────────────────────────
+  const [currentSessionId, setCurrentSessionId] = useState<number | null>(null)
+  const [showHistory, setShowHistory] = useState(false)
+
   // Build axios headers for every API call
-  const apiHeaders = settings.apiKey
-    ? { 'X-API-Key': settings.apiKey, 'X-AI-Provider': settings.provider }
-    : {}
+  const apiHeaders = {
+    ...(settings.apiKey ? { 'X-API-Key': settings.apiKey, 'X-AI-Provider': settings.provider } : {}),
+    ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+    ...(currentSessionId ? { 'X-Session-Id': String(currentSessionId) } : {}),
+  }
 
   const [messages, setMessages] = useState<ChatMessage[]>([{
     role: 'assistant',
@@ -432,11 +440,13 @@ export default function App() {
         })
         reply = res.data.reply
         newHistory = res.data.updatedHistory
+        if (res.data.sessionId) setCurrentSessionId(res.data.sessionId)
       } else {
         const hist = [...apiHistory, { role: 'user' as const, content: text }]
         const res = await api.post('/api/chat', { messages: hist }, { headers: apiHeaders })
         reply = res.data.reply
         newHistory = [...hist, { role: 'assistant' as const, content: reply }]
+        if (res.data.sessionId) setCurrentSessionId(res.data.sessionId)
       }
 
       setApiHistory(newHistory)
@@ -471,6 +481,7 @@ export default function App() {
 
       addMessage({ role: 'assistant', content: res.data.analysis, frames: res.data.frames, isAnalysis: true })
       setApiHistory(res.data.updatedHistory)
+      if (res.data.sessionId) setCurrentSessionId(res.data.sessionId)
       setVideoA(null); setPreviewA(null)
     } catch (err: unknown) {
       const msg = axios.isAxiosError(err) ? (err.response?.data?.error ?? err.message) : String(err)
@@ -522,6 +533,7 @@ export default function App() {
 
       addMessage({ role: 'assistant', content: res.data.analysis, frames: res.data.framesA, isAnalysis: true })
       setApiHistory(res.data.updatedHistory)
+      if (res.data.sessionId) setCurrentSessionId(res.data.sessionId)
       setVideoA(null); setPreviewA(null); setVideoB(null); setPreviewB(null)
     } catch (err: unknown) {
       const msg = axios.isAxiosError(err) ? (err.response?.data?.error ?? err.message) : String(err)
@@ -564,6 +576,27 @@ export default function App() {
         <LoginModal onClose={() => setShowLogin(false)} onSuccess={handleAuthSuccess} />
       )}
 
+      {/* History sidebar */}
+      {showHistory && authToken && (
+        <HistorySidebar
+          api={api}
+          authToken={authToken}
+          currentSessionId={currentSessionId}
+          onClose={() => setShowHistory(false)}
+          onLoad={(loaded: LoadedSession) => {
+            setCurrentSessionId(loaded.sessionId)
+            setShowHistory(false)
+            const chatMsgs: ChatMessage[] = loaded.messages.map(m => ({
+              role: m.role,
+              content: m.content,
+              frames: m.frame_urls.length > 0 ? m.frame_urls : undefined,
+            }))
+            setMessages(chatMsgs)
+            setApiHistory(loaded.messages.map(m => ({ role: m.role, content: m.content })))
+          }}
+        />
+      )}
+
       {/* Header */}
       <header className="border-b border-gray-800 px-4 py-3 flex items-center gap-3 shrink-0">
         <span className="text-xl">🎾</span>
@@ -575,10 +608,22 @@ export default function App() {
           onClick={() => {
             setMessages([{ role: 'assistant', content: '新对话开始了 🎾 有什么可以帮你？' }])
             setApiHistory([])
+            setCurrentSessionId(null)
           }}
           className="text-xs text-gray-500 hover:text-gray-300 transition-colors">
           新对话
         </button>
+
+        {/* History button — only when logged in */}
+        {authUser && (
+          <button
+            onClick={() => setShowHistory(v => !v)}
+            title="历史记录"
+            className={`w-8 h-8 rounded-lg flex items-center justify-center text-base transition-colors
+              ${showHistory ? 'bg-green-900/50 text-green-400' : 'bg-gray-800 text-gray-500 hover:text-gray-300'}`}>
+            🕐
+          </button>
+        )}
 
         {/* Auth button */}
         {authUser ? (
