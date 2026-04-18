@@ -9,14 +9,17 @@ export interface ChatOptions {
   provider?: AIProvider
   /** User-supplied API key (BYOK). Takes precedence over server key. */
   apiKey?: string
+  /** User's personal coach style preference, appended to the system prompt */
+  coachStyle?: string
 }
 
 export async function chat(messages: ChatMessage[], options?: ChatOptions): Promise<string> {
-  const provider = options?.provider ?? config.provider
-  const apiKey   = options?.apiKey   // undefined → use server default
+  const provider   = options?.provider   ?? config.provider
+  const apiKey     = options?.apiKey
+  const coachStyle = options?.coachStyle
 
   if (provider === 'claude') {
-    return chatWithClaude(messages, apiKey)
+    return chatWithClaude(messages, apiKey, coachStyle)
   }
-  return chatWithOpenAI(messages, apiKey)
+  return chatWithOpenAI(messages, apiKey, coachStyle)
 }

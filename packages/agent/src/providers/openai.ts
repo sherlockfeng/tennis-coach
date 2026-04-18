@@ -6,10 +6,21 @@ import type { ChatMessage } from './claude.js'
 // Default client using server-configured key (may be empty if server runs in BYOK-only mode)
 const defaultClient = new OpenAI({ apiKey: config.openai.apiKey || 'placeholder' })
 
-export async function chatWithOpenAI(messages: ChatMessage[], apiKey?: string): Promise<string> {
+function buildSystemPrompt(coachStyle?: string) {
+  if (!coachStyle?.trim()) return TENNIS_COACH_SYSTEM_PROMPT
+  return `${TENNIS_COACH_SYSTEM_PROMPT}
+
+## 个性化教学风格要求
+
+${coachStyle.trim()}
+
+请严格按照以上风格要求与学员互动，这是学员本人设置的偏好。`
+}
+
+export async function chatWithOpenAI(messages: ChatMessage[], apiKey?: string, coachStyle?: string): Promise<string> {
   const client = apiKey ? new OpenAI({ apiKey }) : defaultClient
   const formatted: OpenAI.ChatCompletionMessageParam[] = [
-    { role: 'system', content: TENNIS_COACH_SYSTEM_PROMPT },
+    { role: 'system', content: buildSystemPrompt(coachStyle) },
     ...messages.map((msg): OpenAI.ChatCompletionMessageParam => {
       if (msg.role === 'user' && msg.images && msg.images.length > 0) {
         return {
