@@ -1,5 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import axios from 'axios'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import HistorySidebar, { type LoadedSession } from './components/HistorySidebar.js'
 
 // In production VITE_API_BASE points to the Render backend URL.
@@ -198,9 +200,31 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
             </div>
           </div>
         )}
-        <div className={`rounded-2xl px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap
+        <div className={`rounded-2xl px-4 py-2.5 text-sm leading-relaxed
           ${isUser ? 'bg-green-700 text-white rounded-tr-sm' : 'bg-gray-800 text-gray-100 rounded-tl-sm'}`}>
-          {msg.content}
+          {isUser ? msg.content : (
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              components={{
+                h1: ({ children }) => <p className="font-bold text-base mb-1">{children}</p>,
+                h2: ({ children }) => <p className="font-bold mb-1">{children}</p>,
+                h3: ({ children }) => <p className="font-semibold mb-0.5">{children}</p>,
+                p:  ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+                ul: ({ children }) => <ul className="list-disc list-inside mb-2 space-y-0.5">{children}</ul>,
+                ol: ({ children }) => <ol className="list-decimal list-inside mb-2 space-y-0.5">{children}</ol>,
+                li: ({ children }) => <li className="leading-relaxed">{children}</li>,
+                strong: ({ children }) => <strong className="font-semibold text-white">{children}</strong>,
+                hr: () => <hr className="border-gray-600 my-2" />,
+                blockquote: ({ children }) => (
+                  <blockquote className="border-l-2 border-green-500 pl-3 text-gray-300 my-1">{children}</blockquote>
+                ),
+                code: ({ children }) => (
+                  <code className="bg-gray-700 rounded px-1 text-xs font-mono">{children}</code>
+                ),
+              }}>
+              {msg.content}
+            </ReactMarkdown>
+          )}
         </div>
       </div>
     </div>
