@@ -15,8 +15,14 @@ export async function initDb() {
       password_hash TEXT NOT NULL,
       api_key       TEXT NOT NULL DEFAULT '',
       api_provider  TEXT NOT NULL DEFAULT 'claude',
+      coach_style   TEXT NOT NULL DEFAULT '',
       created_at    BIGINT NOT NULL
     )
+  `)
+
+  // Migrate: add coach_style if it doesn't exist yet
+  await pool.query(`
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS coach_style TEXT NOT NULL DEFAULT ''
   `)
 
   await pool.query(`

@@ -11,7 +11,18 @@ export interface ChatMessage {
   images?: string[]  // base64 jpeg strings
 }
 
-export async function chatWithClaude(messages: ChatMessage[], apiKey?: string): Promise<string> {
+function buildSystemPrompt(coachStyle?: string) {
+  if (!coachStyle?.trim()) return TENNIS_COACH_SYSTEM_PROMPT
+  return `${TENNIS_COACH_SYSTEM_PROMPT}
+
+## 个性化教学风格要求
+
+${coachStyle.trim()}
+
+请严格按照以上风格要求与学员互动，这是学员本人设置的偏好。`
+}
+
+export async function chatWithClaude(messages: ChatMessage[], apiKey?: string, coachStyle?: string): Promise<string> {
   const client = apiKey ? new Anthropic({ apiKey }) : defaultClient
   const formatted: Anthropic.MessageParam[] = messages.map((msg) => {
     if (msg.role === 'user' && msg.images && msg.images.length > 0) {
@@ -36,7 +47,7 @@ export async function chatWithClaude(messages: ChatMessage[], apiKey?: string): 
   const response = await client.messages.create({
     model: config.claude.model,
     max_tokens: 2048,
-    system: TENNIS_COACH_SYSTEM_PROMPT,
+    system: buildSystemPrompt(coachStyle),
     messages: formatted,
   })
 

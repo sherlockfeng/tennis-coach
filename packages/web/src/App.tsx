@@ -20,7 +20,16 @@ interface AuthUser {
   email: string
   apiKey: string
   apiProvider: 'claude' | 'openai'
+  coachStyle: string
 }
+
+const COACH_PRESETS = [
+  { id: 'balanced', label: '均衡型', instruction: '' },
+  { id: 'strict',   label: '严厉型', instruction: '请以严厉风格执教：直接指出所有问题，不要过多鼓励，像对待职业球员一样严格要求，要求学员做到更好。' },
+  { id: 'question', label: '启发型', instruction: '请以启发式风格执教：多用问题引导学员自己思考（如"你觉得这里的击球点应该在哪里？"），少直接给答案，帮助学员建立自主分析能力。' },
+  { id: 'detail',   label: '细节型', instruction: '请以细节深度风格执教：深入分析每个技术细节，每个动作阶段都要详细拆解，不放过任何可以改进的点，提供更多技术深度。' },
+  { id: 'custom',   label: '自定义', instruction: '' },
+] as const
 
 const SETTINGS_KEY = 'tc_user_settings'
 const AUTH_KEY = 'tc_auth'
@@ -344,13 +353,13 @@ export default function App() {
     setAuthToken(token)
     setAuthUser(user)
     setShowLogin(false)
-    // Auto-populate settings from the account's saved API key
     if (user.apiKey) {
       const s: UserSettings = { provider: user.apiProvider, apiKey: user.apiKey }
       saveSettings(s)
       setSettings(s)
       setDraftSettings(s)
     }
+    if (user.coachStyle) setCoachStyle(user.coachStyle)
   }
 
   const handleLogout = () => {
@@ -366,6 +375,10 @@ export default function App() {
   const [showKey, setShowKey] = useState(false)
   const [syncingToken, setSyncingToken] = useState(false)
   const [syncMsg, setSyncMsg] = useState('')
+  const [coachStyle, setCoachStyle] = useState('')
+  const [draftCoachPreset, setDraftCoachPreset] = useState('balanced')
+  const [draftCoachCustom, setDraftCoachCustom] = useState('')
+  const [savingStyle, setSavingStyle] = useState(false)
 
   const syncTokenToAccount = async () => {
     if (!authToken) return
@@ -391,11 +404,28 @@ export default function App() {
   const [currentSessionId, setCurrentSessionId] = useState<number | null>(null)
   const [showHistory, setShowHistory] = useState(false)
 
+  const saveCoachStyle = async () => {
+    const instruction = draftCoachPreset === 'custom'
+      ? draftCoachCustom.trim()
+      : COACH_PRESETS.find(p => p.id === draftCoachPreset)?.instruction ?? ''
+    setSavingStyle(true)
+    try {
+      await api.put('/api/auth/coach-style', { coachStyle: instruction },
+        { headers: { Authorization: `Bearer ${authToken}` } })
+      setCoachStyle(instruction)
+      const updatedUser = { ...authUser!, coachStyle: instruction }
+      saveAuth(authToken!, updatedUser)
+      setAuthUser(updatedUser)
+    } catch {}
+    setSavingStyle(false)
+  }
+
   // Build axios headers for every API call
   const apiHeaders = {
     ...(settings.apiKey ? { 'X-API-Key': settings.apiKey, 'X-AI-Provider': settings.provider } : {}),
     ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
     ...(currentSessionId ? { 'X-Session-Id': String(currentSessionId) } : {}),
+    ...(coachStyle ? { 'X-Coach-Style': coachStyle } : {}),
   }
 
   const [messages, setMessages] = useState<ChatMessage[]>([{
@@ -689,7 +719,13 @@ export default function App() {
         )}
 
         <button
-          onClick={() => { setDraftSettings({ ...settings }); setSyncMsg(''); setShowSettings(true) }}
+          onClick={() => {
+            setDraftSettings({ ...settings }); setSyncMsg('')
+            const matched = COACH_PRESETS.find(p => p.instruction === coachStyle && p.id !== 'custom')
+            setDraftCoachPreset(matched ? matched.id : coachStyle ? 'custom' : 'balanced')
+            setDraftCoachCustom(coachStyle)
+            setShowSettings(true)
+          }}
           title="API Key 设置"
           className={`w-8 h-8 rounded-lg flex items-center justify-center text-base transition-colors
             ${settings.apiKey ? 'bg-green-900/50 text-green-400' : 'bg-gray-800 text-gray-500 hover:text-gray-300'}`}>
@@ -752,6 +788,42 @@ export default function App() {
                 <p className="text-xs text-yellow-600">留空则使用服务器内置 Key（如有）</p>
               )}
             </div>
+
+            {/* Coach style (shown only when logged in) */}
+            {authUser && (
+              <div className="space-y-2">
+                <p className="text-xs text-gray-400 font-medium">教练风格</p>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {COACH_PRESETS.map(p => (
+                    <button key={p.id}
+                      onClick={() => setDraftCoachPreset(p.id)}
+                      className={`py-1.5 rounded-lg text-xs font-medium transition-colors
+                        ${draftCoachPreset === p.id
+                          ? 'bg-green-700 text-white'
+                          : 'bg-gray-800 text-gray-400 hover:text-gray-200'}`}>
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+                {draftCoachPreset === 'custom' && (
+                  <textarea
+                    value={draftCoachCustom}
+                    onChange={e => setDraftCoachCustom(e.target.value)}
+                    placeholder="描述你想要的教练风格，例如：严厉一些，多提意见，少鼓励…"
+                    rows={3}
+                    className="w-full bg-gray-800 rounded-lg px-3 py-2 text-xs text-gray-100
+                      placeholder-gray-600 resize-none focus:outline-none focus:ring-1 focus:ring-green-600"
+                  />
+                )}
+                <button
+                  onClick={saveCoachStyle}
+                  disabled={savingStyle}
+                  className="w-full py-2 rounded-xl text-xs font-medium bg-gray-800
+                    text-gray-300 hover:text-green-400 hover:bg-gray-700 disabled:opacity-50 transition-colors">
+                  {savingStyle ? '保存中…' : '保存风格偏好'}
+                </button>
+              </div>
+            )}
 
             {/* Sync to account (shown only when logged in) */}
             {authUser && (

@@ -23,14 +23,15 @@ const router = Router()
  * Returns null when no key is available at all (caller should respond 401).
  */
 function resolveChat(req: Request): ChatOptions | null {
-  const headerKey      = (req.headers['x-api-key']     as string | undefined)?.trim() || undefined
-  const headerProvider = (req.headers['x-ai-provider'] as string | undefined)?.trim() as AIProvider | undefined
+  const headerKey      = (req.headers['x-api-key']      as string | undefined)?.trim() || undefined
+  const headerProvider = (req.headers['x-ai-provider']  as string | undefined)?.trim() as AIProvider | undefined
+  const coachStyle     = (req.headers['x-coach-style']  as string | undefined)?.trim() || undefined
 
   const provider = headerProvider ?? config.provider
   const apiKey   = headerKey ?? (provider === 'claude' ? config.claude.apiKey : config.openai.apiKey)
 
-  if (!apiKey) return null   // no key at all — reject
-  return { provider, apiKey: headerKey }  // apiKey=undefined means "use server default"
+  if (!apiKey) return null
+  return { provider, apiKey: headerKey, coachStyle }
 }
 
 // Multer: store uploads in temp dir

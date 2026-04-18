@@ -39,7 +39,7 @@ router.post('/register', async (req: Request, res: Response) => {
 
   res.status(201).json({
     token: signToken(userId, normalized),
-    user: { id: userId, email: normalized, apiKey: '', apiProvider: 'claude' },
+    user: { id: userId, email: normalized, apiKey: '', apiProvider: 'claude', coachStyle: '' },
   })
 })
 
@@ -52,12 +52,12 @@ router.post('/login', async (req: Request, res: Response) => {
   }
 
   const result = await pool.query(
-    'SELECT id, email, password_hash, api_key, api_provider FROM users WHERE email = $1',
+    'SELECT id, email, password_hash, api_key, api_provider, coach_style FROM users WHERE email = $1',
     [email.toLowerCase()]
   )
   const user = result.rows[0] as {
     id: number; email: string; password_hash: string
-    api_key: string; api_provider: string
+    api_key: string; api_provider: string; coach_style: string
   } | undefined
 
   if (!user) {
@@ -71,14 +71,18 @@ router.post('/login', async (req: Request, res: Response) => {
 
   res.json({
     token: signToken(user.id, user.email),
-    user: { id: user.id, email: user.email, apiKey: user.api_key, apiProvider: user.api_provider },
+    user: {
+      id: user.id, email: user.email,
+      apiKey: user.api_key, apiProvider: user.api_provider,
+      coachStyle: user.coach_style,
+    },
   })
 })
 
 // ─── GET /api/auth/me ────────────────────────────────────────────────
 router.get('/me', requireAuth, async (req: AuthRequest, res: Response) => {
   const result = await pool.query(
-    'SELECT id, email, api_key, api_provider FROM users WHERE id = $1',
+    'SELECT id, email, api_key, api_provider, coach_style FROM users WHERE id = $1',
     [req.userId]
   )
   const user = result.rows[0]
@@ -87,7 +91,11 @@ router.get('/me', requireAuth, async (req: AuthRequest, res: Response) => {
     return res.status(404).json({ error: '用户不存在' })
   }
 
-  res.json({ id: user.id, email: user.email, apiKey: user.api_key, apiProvider: user.api_provider })
+  res.json({
+    id: user.id, email: user.email,
+    apiKey: user.api_key, apiProvider: user.api_provider,
+    coachStyle: user.coach_style,
+  })
 })
 
 // ─── PUT /api/auth/api-token ─────────────────────────────────────────
@@ -102,6 +110,16 @@ router.put('/api-token', requireAuth, async (req: AuthRequest, res: Response) =>
     [key, provider, req.userId]
   )
 
+  res.json({ ok: true })
+})
+
+// ─── PUT /api/auth/coach-style ────────────────────────────────────────
+router.put('/coach-style', requireAuth, async (req: AuthRequest, res: Response) => {
+  const { coachStyle } = req.body as { coachStyle?: string }
+  await pool.query(
+    'UPDATE users SET coach_style = $1 WHERE id = $2',
+    [(coachStyle ?? '').trim(), req.userId]
+  )
   res.json({ ok: true })
 })
 
