@@ -27,12 +27,13 @@ function resolveChat(req: Request): ChatOptions | null {
   const headerProvider = (req.headers['x-ai-provider']  as string | undefined)?.trim() as AIProvider | undefined
   const rawCoachStyle  = (req.headers['x-coach-style']  as string | undefined)?.trim()
   const coachStyle     = rawCoachStyle ? decodeURIComponent(rawCoachStyle) : undefined
+  const language       = (req.headers['x-language'] as string | undefined)?.trim() || undefined
 
   const provider = headerProvider ?? config.provider
   const apiKey   = headerKey ?? (provider === 'claude' ? config.claude.apiKey : config.openai.apiKey)
 
   if (!apiKey) return null
-  return { provider, apiKey: headerKey, coachStyle }
+  return { provider, apiKey: headerKey, coachStyle, language }
 }
 
 // Multer: store uploads in temp dir

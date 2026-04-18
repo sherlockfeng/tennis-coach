@@ -11,6 +11,7 @@ const MOCK_USER = {
 async function loginAs(page: import('@playwright/test').Page) {
   await page.addInitScript((user) => {
     localStorage.setItem('tc_auth', JSON.stringify({ token: 'mock-token', user }))
+    localStorage.setItem('tc_lang', 'zh')
   }, MOCK_USER)
 }
 
