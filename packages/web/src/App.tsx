@@ -736,9 +736,9 @@ export default function App() {
       {/* Settings Modal */}
       {showSettings && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
-          <div className="bg-gray-900 border border-gray-700 rounded-2xl p-6 w-full max-w-sm space-y-5">
+          <div className="bg-gray-900 border border-gray-700 rounded-2xl p-6 w-full max-w-sm space-y-5 overflow-y-auto max-h-[90vh]">
             <div className="flex items-center justify-between">
-              <h2 className="text-sm font-bold text-white">API Key 设置</h2>
+              <h2 className="text-sm font-bold text-white">设置</h2>
               <button onClick={() => setShowSettings(false)} className="text-gray-500 hover:text-gray-300 text-lg">×</button>
             </div>
 
