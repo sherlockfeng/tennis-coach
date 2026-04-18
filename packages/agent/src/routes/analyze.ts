@@ -5,6 +5,9 @@ import os from 'os'
 import { extractFrames, cleanupTmpDir } from '../services/frameExtractor.js'
 import { chat, type ChatMessage, type ChatOptions } from '../services/aiProvider.js'
 import { config, type AIProvider } from '../config.js'
+import { extractUserId, extractSessionId } from '../middleware/extractUser.js'
+import { getOrCreateSession, backgroundSave } from '../services/sessionSaver.js'
+import { extractAndSaveTechnique } from '../services/techniqueExtractor.js'
 
 const router = Router()
 
@@ -81,18 +84,36 @@ router.post('/analyze', upload.single('video'), async (req: Request, res: Respon
     const messages: ChatMessage[] = [...history, userMsg]
     const analysis = await chat(messages, chatOptions)
 
+    const userId = extractUserId(req)
+    let sessionId: number | null = null
+    if (userId) {
+      const title = `视频分析 ${new Date().toLocaleDateString('zh-CN')}`
+      sessionId = await getOrCreateSession(userId, extractSessionId(req), 'analyze', title).catch(() => null)
+    }
+
     res.json({
       frames: extraction.frames,
       frameCount: extraction.frameCount,
       analysis,
       provider: config.provider,
-      // Return updated history for client to store
+      sessionId,
       updatedHistory: [
         ...history,
         userMsg,
         { role: 'assistant', content: analysis },
       ],
     })
+
+    if (userId && sessionId) {
+      backgroundSave({
+        userId, sessionId,
+        userContent: `视频分析 第${startSec}s~${endSec}s，${fps}fps`,
+        assistantContent: analysis,
+        frames: extraction.frames,
+        chatOptions,
+        extractTechnique: (c, o) => extractAndSaveTechnique(c, o, userId),
+      })
+    }
   } catch (err: unknown) {
     console.error('[/analyze]', err)
     res.status(500).json({ error: err instanceof Error ? err.message : String(err) })
@@ -119,10 +140,25 @@ router.post('/chat', async (req: Request, res: Response) => {
 
     const reply = await chat(messages, chatOptions)
 
-    res.json({
-      reply,
-      provider: config.provider,
-    })
+    const userId = extractUserId(req)
+    let sessionId: number | null = null
+    if (userId) {
+      const firstMsg = (messages[0]?.content ?? '对话').slice(0, 30)
+      sessionId = await getOrCreateSession(userId, extractSessionId(req), 'chat', firstMsg).catch(() => null)
+    }
+
+    res.json({ reply, provider: config.provider, sessionId })
+
+    if (userId && sessionId) {
+      backgroundSave({
+        userId, sessionId,
+        userContent: messages[messages.length - 1]?.content ?? '',
+        assistantContent: reply,
+        frames: [],
+        chatOptions,
+        extractTechnique: () => Promise.resolve(),
+      })
+    }
   } catch (err: unknown) {
     console.error('[/chat]', err)
     res.status(500).json({ error: err instanceof Error ? err.message : String(err) })
@@ -168,11 +204,29 @@ router.post('/chat/image', uploadImage.array('images', 10), async (req: Request,
     const messages: ChatMessage[] = [...history, userMsg]
     const reply = await chat(messages, chatOptions)
 
+    const userId = extractUserId(req)
+    let sessionId: number | null = null
+    if (userId) {
+      sessionId = await getOrCreateSession(userId, extractSessionId(req), 'chat', `图片分析 ${new Date().toLocaleDateString('zh-CN')}`).catch(() => null)
+    }
+
     res.json({
       reply,
       provider: config.provider,
+      sessionId,
       updatedHistory: [...history, userMsg, { role: 'assistant', content: reply }],
     })
+
+    if (userId && sessionId) {
+      backgroundSave({
+        userId, sessionId,
+        userContent: userMsg.content,
+        assistantContent: reply,
+        frames: b64List,
+        chatOptions,
+        extractTechnique: (c, o) => extractAndSaveTechnique(c, o, userId),
+      })
+    }
   } catch (err: unknown) {
     console.error('[/chat/image]', err)
     res.status(500).json({ error: err instanceof Error ? err.message : String(err) })
@@ -322,19 +376,42 @@ router.post(
       const messages: ChatMessage[] = [...history, userMsg]
       const analysis = await chat(messages, chatOptions)
 
+      const userId = extractUserId(req)
+      const mode = fileB ? 'two-video' : recommendStyle ? 'recommend' : 'pro-player'
+      const titleMap: Record<string, string> = {
+        'two-video': `视频对比 ${new Date().toLocaleDateString('zh-CN')}`,
+        'recommend': `风格推荐 ${new Date().toLocaleDateString('zh-CN')}`,
+        'pro-player': `与${playerName || '球员'}对比 ${new Date().toLocaleDateString('zh-CN')}`,
+      }
+      let sessionId: number | null = null
+      if (userId) {
+        sessionId = await getOrCreateSession(userId, extractSessionId(req), 'compare', titleMap[mode]).catch(() => null)
+      }
+
       res.json({
         analysis,
         framesA: extractionA.frames,
-        framesB: fileB ? (await import('../services/frameExtractor.js')
-          .then(() => [])) : [],
+        framesB: [],
         provider: config.provider,
-        mode: fileB ? 'two-video' : recommendStyle ? 'recommend' : 'pro-player',
+        mode,
+        sessionId,
         updatedHistory: [
           ...history,
           { role: 'user' as const,      content: userMsg.content },
           { role: 'assistant' as const, content: analysis },
         ],
       })
+
+      if (userId && sessionId) {
+        backgroundSave({
+          userId, sessionId,
+          userContent: userMsg.content.slice(0, 100),
+          assistantContent: analysis,
+          frames: extractionA.frames,
+          chatOptions,
+          extractTechnique: (c, o) => extractAndSaveTechnique(c, o, userId),
+        })
+      }
     } catch (err: unknown) {
       console.error('[/compare]', err)
       res.status(500).json({ error: err instanceof Error ? err.message : String(err) })

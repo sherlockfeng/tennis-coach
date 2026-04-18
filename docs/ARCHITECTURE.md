@@ -82,12 +82,57 @@ src/
 **新增文件**：
 ```
 packages/agent/src/
-├── db.ts                  ← pg Pool 初始化，initDb() 建表
+├── db.ts                        ← pg Pool 初始化，initDb() 建表（users/sessions/messages/technique_profile）
 ├── middleware/
-│   └── authMiddleware.ts  ← JWT 验证中间件
+│   ├── authMiddleware.ts        ← JWT 验证中间件（强制）
+│   └── extractUser.ts          ← JWT 提取（可选，不强制登录）
+├── services/
+│   ├── storage.ts              ← Supabase Storage 上传帧图片
+│   ├── sessionSaver.ts         ← 创建/更新 session、保存 message
+│   └── techniqueExtractor.ts  ← AI 提取技术标签，upsert technique_profile
 └── routes/
-    └── auth.ts            ← 注册/登录/Profile/Token CRUD
+    ├── auth.ts                 ← 注册/登录/Profile/Token CRUD
+    ├── sessions.ts             ← 会话列表/详情/删除
+    └── profile.ts              ← 技术档案读取
 ```
+
+**数据库完整表结构**：
+```sql
+-- 用户会话（每次对话/分析为一个 session）
+CREATE TABLE sessions (
+  id         SERIAL PRIMARY KEY,
+  user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  type       TEXT NOT NULL DEFAULT 'chat',  -- 'chat'|'analyze'|'compare'
+  title      TEXT NOT NULL DEFAULT '',
+  created_at BIGINT NOT NULL,
+  updated_at BIGINT NOT NULL
+);
+
+-- 会话内消息
+CREATE TABLE messages (
+  id         SERIAL PRIMARY KEY,
+  session_id INTEGER NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+  role       TEXT NOT NULL,
+  content    TEXT NOT NULL,
+  frame_urls TEXT[] NOT NULL DEFAULT '{}',  -- Supabase Storage 公开 URL
+  created_at BIGINT NOT NULL
+);
+
+-- 用户技术档案（自动累积）
+CREATE TABLE technique_profile (
+  user_id    INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  strengths  TEXT[] NOT NULL DEFAULT '{}',
+  weaknesses TEXT[] NOT NULL DEFAULT '{}',
+  style_tags TEXT[] NOT NULL DEFAULT '{}',
+  updated_at BIGINT NOT NULL
+);
+```
+
+**Supabase Storage**：
+- Bucket 名：`tennis-frames`（需设为 Public）
+- 路径格式：`{userId}/{sessionId}/{frameIndex}.jpg`
+- 环境变量：`SUPABASE_URL`、`SUPABASE_SERVICE_ROLE_KEY`
+- 未配置时自动跳过，不影响其他功能
 
 **数据库表**：
 ```sql

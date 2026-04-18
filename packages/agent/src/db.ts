@@ -4,7 +4,6 @@ const { Pool } = pg
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  // Render / Supabase 等云服务需要 SSL，本地开发可不用
   ssl: process.env.DATABASE_URL?.includes('localhost') ? false : { rejectUnauthorized: false },
 })
 
@@ -17,6 +16,38 @@ export async function initDb() {
       api_key       TEXT NOT NULL DEFAULT '',
       api_provider  TEXT NOT NULL DEFAULT 'claude',
       created_at    BIGINT NOT NULL
+    )
+  `)
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS sessions (
+      id         SERIAL PRIMARY KEY,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      type       TEXT NOT NULL DEFAULT 'chat',
+      title      TEXT NOT NULL DEFAULT '',
+      created_at BIGINT NOT NULL,
+      updated_at BIGINT NOT NULL
+    )
+  `)
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS messages (
+      id         SERIAL PRIMARY KEY,
+      session_id INTEGER NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+      role       TEXT NOT NULL,
+      content    TEXT NOT NULL,
+      frame_urls TEXT[] NOT NULL DEFAULT '{}',
+      created_at BIGINT NOT NULL
+    )
+  `)
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS technique_profile (
+      user_id    INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      strengths  TEXT[] NOT NULL DEFAULT '{}',
+      weaknesses TEXT[] NOT NULL DEFAULT '{}',
+      style_tags TEXT[] NOT NULL DEFAULT '{}',
+      updated_at BIGINT NOT NULL
     )
   `)
 }
