@@ -249,27 +249,45 @@ function FrameSlider({ label, value, min, max, step, unit, onChange }: {
 }
 
 function VideoSlot({
-  label, file, preview, onSelect, onClear, settings, onSettingsChange, videoRef,
+  label, file, preview, onSelect, onClear, onDrop, settings, onSettingsChange, videoRef,
 }: {
   label: string
   file: File | null
   preview: string | null
   onSelect: () => void
   onClear: () => void
+  onDrop: (file: File) => void
   settings: FrameSettings
   onSettingsChange: (s: FrameSettings) => void
   videoRef: React.RefObject<HTMLVideoElement>
 }) {
+  const [dragging, setDragging] = useState(false)
   const frameCount = Math.max(1, Math.floor((settings.endSec - settings.startSec) * settings.fps))
+
+  const handleDragOver = (e: React.DragEvent) => { e.preventDefault(); setDragging(true) }
+  const handleDragLeave = () => setDragging(false)
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    setDragging(false)
+    const f = e.dataTransfer.files[0]
+    if (f && f.type.startsWith('video/')) onDrop(f)
+  }
+
   return (
     <div className="space-y-2">
       <p className="text-xs font-semibold text-gray-400">{label}</p>
       {!file ? (
-        <div onClick={onSelect}
-          className="border-2 border-dashed border-gray-700 rounded-xl p-4 text-center
-            cursor-pointer hover:border-green-500 hover:bg-green-950/20 transition-colors">
-          <div className="text-xl mb-1">📁</div>
-          <p className="text-xs text-gray-400">点击选择</p>
+        <div
+          onClick={onSelect}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+          className={`border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition-colors
+            ${dragging
+              ? 'border-green-400 bg-green-950/40'
+              : 'border-gray-700 hover:border-green-500 hover:bg-green-950/20'}`}>
+          <div className="text-xl mb-1">{dragging ? '🎬' : '📁'}</div>
+          <p className="text-xs text-gray-400">{dragging ? '松开即可上传' : '点击选择 或 拖拽视频到此处'}</p>
         </div>
       ) : (
         <div className="space-y-2">
@@ -842,6 +860,7 @@ export default function App() {
               file={videoA} preview={previewA}
               onSelect={() => fileARef.current?.click()}
               onClear={() => { setVideoA(null); setPreviewA(null) }}
+              onDrop={f => { setVideoA(f); setPreviewA(URL.createObjectURL(f)) }}
               settings={settingsA} onSettingsChange={setSettingsA}
               videoRef={videoRefA}
             />
@@ -855,6 +874,7 @@ export default function App() {
                 file={videoA} preview={previewA}
                 onSelect={() => fileARef.current?.click()}
                 onClear={() => { setVideoA(null); setPreviewA(null) }}
+                onDrop={f => { setVideoA(f); setPreviewA(URL.createObjectURL(f)) }}
                 settings={settingsA} onSettingsChange={setSettingsA}
                 videoRef={videoRefA}
               />
@@ -863,6 +883,7 @@ export default function App() {
                 file={videoB} preview={previewB}
                 onSelect={() => fileBRef.current?.click()}
                 onClear={() => { setVideoB(null); setPreviewB(null) }}
+                onDrop={f => { setVideoB(f); setPreviewB(URL.createObjectURL(f)) }}
                 settings={settingsB} onSettingsChange={setSettingsB}
                 videoRef={videoRefB}
               />
@@ -877,6 +898,7 @@ export default function App() {
                 file={videoA} preview={previewA}
                 onSelect={() => fileARef.current?.click()}
                 onClear={() => { setVideoA(null); setPreviewA(null) }}
+                onDrop={f => { setVideoA(f); setPreviewA(URL.createObjectURL(f)) }}
                 settings={settingsA} onSettingsChange={setSettingsA}
                 videoRef={videoRefA}
               />
