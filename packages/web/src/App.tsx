@@ -642,13 +642,13 @@ export default function App() {
 
   // ── Render ────────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col h-screen">
+    <div className="flex h-screen">
       {/* Auth modal */}
       {showLogin && (
         <LoginModal onClose={() => setShowLogin(false)} onSuccess={handleAuthSuccess} />
       )}
 
-      {/* History sidebar */}
+      {/* History sidebar — flex sibling, pushes content right instead of overlaying */}
       {showHistory && authToken && (
         <HistorySidebar
           api={api}
@@ -668,6 +668,9 @@ export default function App() {
           }}
         />
       )}
+
+      {/* Main content */}
+      <div className="flex flex-col flex-1 min-w-0">
 
       {/* Header */}
       <header className="border-b border-gray-800 px-4 py-3 flex items-center gap-3 shrink-0">
@@ -1091,6 +1094,7 @@ export default function App() {
         }} />
       <input ref={imageInputRef} type="file" accept="image/*" multiple className="hidden"
         onChange={e => { Array.from(e.target.files ?? []).forEach(handleImageSelect); e.target.value = '' }} />
+      </div> {/* end main content */}
     </div>
   )
 }

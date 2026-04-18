@@ -97,8 +97,7 @@ export default function HistorySidebar({
   )
 
   return (
-    <div className="fixed inset-y-0 left-0 z-40 w-72 bg-gray-950 border-r border-gray-800
-      flex flex-col shadow-2xl">
+    <div className="w-72 shrink-0 bg-gray-950 border-r border-gray-800 flex flex-col h-full">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800 shrink-0">
         <h2 className="text-sm font-bold text-white">历史记录</h2>
