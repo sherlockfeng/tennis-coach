@@ -54,6 +54,7 @@ export const TRANSLATIONS = {
     presetQuestion: '启发型',
     presetDetail: '细节型',
     presetCustom: '自定义',
+    retry: '重试',
 
     // Login modal
     loginTitle: '登录账号',
@@ -154,6 +155,7 @@ export const TRANSLATIONS = {
     presetQuestion: 'Socratic',
     presetDetail: 'Detailed',
     presetCustom: 'Custom',
+    retry: 'Retry',
 
     loginTitle: 'Sign In',
     registerTitle: 'Create Account',
