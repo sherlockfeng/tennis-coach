@@ -495,6 +495,27 @@ export default function App() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, loading])
 
+  // ── Server wakeup ────────────────────────────────────────────────
+  const [serverStatus, setServerStatus] = useState<'unknown' | 'waking' | 'ready'>('unknown')
+
+  useEffect(() => {
+    let cancelled = false
+    const ping = async () => {
+      try {
+        await api.get('/api/health', { timeout: 5000 })
+        if (!cancelled) setServerStatus('ready')
+      } catch {
+        if (!cancelled) {
+          setServerStatus('waking')
+          await new Promise(r => setTimeout(r, 5000))
+          if (!cancelled) ping()
+        }
+      }
+    }
+    ping()
+    return () => { cancelled = true }
+  }, [])
+
   // Fetch pro players list on mount
   useEffect(() => {
     api.get<{ players: ProPlayer[] }>("/api/compare/players")
@@ -933,6 +954,14 @@ export default function App() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Server wakeup banner */}
+      {serverStatus === 'waking' && (
+        <div className="px-4 py-2 bg-yellow-900/40 border-b border-yellow-800/50 flex items-center gap-2 text-xs text-yellow-300">
+          <span className="animate-spin">⏳</span>
+          {t.serverWaking}
         </div>
       )}
 
