@@ -54,6 +54,7 @@ export const TRANSLATIONS = {
     presetQuestion: '启发型',
     presetDetail: '细节型',
     presetCustom: '自定义',
+    retry: '重试',
 
     // Login modal
     loginTitle: '登录账号',
@@ -104,6 +105,9 @@ export const TRANSLATIONS = {
     untitled: '未命名对话',
     yesterday: '昨天',
     daysAgo: (n: number) => `${n}天前`,
+
+    // Server wakeup
+    serverWaking: '服务器休眠中，正在唤醒，请稍候…',
   },
 
   en: {
@@ -154,6 +158,7 @@ export const TRANSLATIONS = {
     presetQuestion: 'Socratic',
     presetDetail: 'Detailed',
     presetCustom: 'Custom',
+    retry: 'Retry',
 
     loginTitle: 'Sign In',
     registerTitle: 'Create Account',
@@ -201,6 +206,9 @@ export const TRANSLATIONS = {
     untitled: 'Untitled',
     yesterday: 'Yesterday',
     daysAgo: (n: number) => `${n} days ago`,
+
+    // Server wakeup
+    serverWaking: 'Server is waking up, please wait…',
   },
 } as const
 

@@ -158,6 +158,7 @@ export interface ChatMessage {
   images?: string[]
   frames?: string[]
   isAnalysis?: boolean
+  onRetry?: () => void
 }
 
 export interface FrameSettings {
@@ -240,6 +241,14 @@ function MessageBubble({ msg, lang }: { msg: ChatMessage; lang: Lang }) {
             </ReactMarkdown>
           )}
         </div>
+        {msg.onRetry && (
+          <button
+            onClick={msg.onRetry}
+            className="self-start mt-0.5 text-xs text-gray-500 hover:text-green-400
+              flex items-center gap-1 transition-colors">
+            🔄 {t.retry}
+          </button>
+        )}
       </div>
     </div>
   )
@@ -486,6 +495,27 @@ export default function App() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, loading])
 
+  // ── Server wakeup ────────────────────────────────────────────────
+  const [serverStatus, setServerStatus] = useState<'unknown' | 'waking' | 'ready'>('unknown')
+
+  useEffect(() => {
+    let cancelled = false
+    const ping = async () => {
+      try {
+        await api.get('/api/health', { timeout: 5000 })
+        if (!cancelled) setServerStatus('ready')
+      } catch {
+        if (!cancelled) {
+          setServerStatus('waking')
+          await new Promise(r => setTimeout(r, 5000))
+          if (!cancelled) ping()
+        }
+      }
+    }
+    ping()
+    return () => { cancelled = true }
+  }, [])
+
   // Fetch pro players list on mount
   useEffect(() => {
     api.get<{ players: ProPlayer[] }>("/api/compare/players")
@@ -498,12 +528,7 @@ export default function App() {
   const addMessage = (msg: ChatMessage) => setMessages(prev => [...prev, msg])
 
   // ── Text / image chat ────────────────────────────────────────────
-  const sendTextMessage = async () => {
-    const text = inputText.trim()
-    if (!text && pendingImages.length === 0) return
-    setLoading(true)
-
-    const snapshot = [...pendingImages]
+  const sendCoreText = async (text: string, snapshot: { file: File; b64: string }[]) => {
     const userMsg: ChatMessage = {
       role: 'user',
       content: text || (snapshot.length > 1
@@ -512,8 +537,6 @@ export default function App() {
       images: snapshot.map(p => p.b64),
     }
     addMessage(userMsg)
-    setInputText('')
-    setPendingImages([])
 
     try {
       let reply = ''
@@ -541,11 +564,29 @@ export default function App() {
       setApiHistory(newHistory)
       addMessage({ role: 'assistant', content: reply })
     } catch (err: unknown) {
-      const msg = axios.isAxiosError(err) ? (err.response?.data?.error ?? err.message) : String(err)
-      addMessage({ role: 'assistant', content: t.errorPrefix + msg })
+      const errMsg = axios.isAxiosError(err) ? (err.response?.data?.error ?? err.message) : String(err)
+      addMessage({
+        role: 'assistant',
+        content: t.errorPrefix + errMsg,
+        onRetry: () => {
+          setMessages(prev => prev.slice(0, -2))
+          setLoading(true)
+          sendCoreText(text, snapshot).finally(() => setLoading(false))
+        },
+      })
     } finally {
       setLoading(false)
     }
+  }
+
+  const sendTextMessage = async () => {
+    const text = inputText.trim()
+    if (!text && pendingImages.length === 0) return
+    setLoading(true)
+    const snapshot = [...pendingImages]
+    setInputText('')
+    setPendingImages([])
+    await sendCoreText(text, snapshot)
   }
 
   // ── Single video analysis ────────────────────────────────────────
@@ -573,8 +614,15 @@ export default function App() {
       if (res.data.sessionId) setCurrentSessionId(res.data.sessionId)
       setVideoA(null); setPreviewA(null)
     } catch (err: unknown) {
-      const msg = axios.isAxiosError(err) ? (err.response?.data?.error ?? err.message) : String(err)
-      addMessage({ role: 'assistant', content: t.analysisFailed + msg })
+      const errMsg = axios.isAxiosError(err) ? (err.response?.data?.error ?? err.message) : String(err)
+      addMessage({
+        role: 'assistant',
+        content: t.analysisFailed + errMsg,
+        onRetry: () => {
+          setMessages(prev => prev.slice(0, -2))
+          sendVideoAnalysis()
+        },
+      })
     } finally {
       setLoading(false)
     }
@@ -625,8 +673,15 @@ export default function App() {
       if (res.data.sessionId) setCurrentSessionId(res.data.sessionId)
       setVideoA(null); setPreviewA(null); setVideoB(null); setPreviewB(null)
     } catch (err: unknown) {
-      const msg = axios.isAxiosError(err) ? (err.response?.data?.error ?? err.message) : String(err)
-      addMessage({ role: 'assistant', content: t.compareFailed + msg })
+      const errMsg = axios.isAxiosError(err) ? (err.response?.data?.error ?? err.message) : String(err)
+      addMessage({
+        role: 'assistant',
+        content: t.compareFailed + errMsg,
+        onRetry: () => {
+          setMessages(prev => prev.slice(0, -2))
+          sendComparison()
+        },
+      })
     } finally {
       setLoading(false)
     }
@@ -691,19 +746,20 @@ export default function App() {
       <div className="flex flex-col flex-1 min-w-0">
 
       {/* Header */}
-      <header className="border-b border-gray-800 px-4 py-3 flex items-center gap-3 shrink-0">
-        <span className="text-xl">🎾</span>
-        <div className="flex-1">
-          <h1 className="text-base font-bold text-white">{t.appTitle}</h1>
-          <p className="text-xs text-gray-500">{t.appSubtitle}</p>
+      <header className="border-b border-gray-800 px-3 py-2.5 flex items-center gap-2 shrink-0">
+        <span className="text-lg shrink-0">🎾</span>
+        <div className="flex-1 min-w-0">
+          <h1 className="text-sm font-bold text-white truncate leading-tight">{t.appTitle}</h1>
+          <p className="text-[10px] text-gray-500 truncate hidden sm:block">{t.appSubtitle}</p>
         </div>
+
         <button
           onClick={() => {
             setMessages([{ role: 'assistant', content: t.newChatStarted }])
             setApiHistory([])
             setCurrentSessionId(null)
           }}
-          className="text-xs text-gray-500 hover:text-gray-300 transition-colors">
+          className="text-xs text-gray-500 hover:text-gray-300 transition-colors shrink-0 whitespace-nowrap">
           {t.newChat}
         </button>
 
@@ -712,29 +768,31 @@ export default function App() {
           <button
             onClick={() => setShowHistory(v => !v)}
             title={t.historyTitle}
-            className={`w-8 h-8 rounded-lg flex items-center justify-center text-base transition-colors
+            className={`w-8 h-8 shrink-0 rounded-lg flex items-center justify-center text-base transition-colors
               ${showHistory ? 'bg-green-900/50 text-green-400' : 'bg-gray-800 text-gray-500 hover:text-gray-300'}`}>
             🕐
           </button>
         )}
 
-        {/* Auth button */}
+        {/* Auth section */}
         {authUser ? (
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-400 max-w-[100px] truncate" title={authUser.email}>
+          <div className="flex items-center gap-1 shrink-0">
+            <span className="text-xs text-gray-400 hidden sm:block max-w-[90px] truncate" title={authUser.email}>
               {authUser.email}
             </span>
             <button
               onClick={handleLogout}
-              className="text-xs text-gray-500 hover:text-red-400 transition-colors">
-              {t.logout}
+              title={t.logout}
+              className="w-8 h-8 rounded-lg flex items-center justify-center text-sm
+                text-gray-500 hover:text-red-400 bg-gray-800 transition-colors">
+              👤
             </button>
           </div>
         ) : (
           <button
             onClick={() => setShowLogin(true)}
             className="text-xs text-gray-400 hover:text-green-400 transition-colors px-2 py-1
-              rounded-lg bg-gray-800 hover:bg-gray-700">
+              rounded-lg bg-gray-800 hover:bg-gray-700 shrink-0 whitespace-nowrap">
             {t.login}
           </button>
         )}
@@ -899,6 +957,14 @@ export default function App() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Server wakeup banner */}
+      {serverStatus === 'waking' && (
+        <div className="px-4 py-2 bg-yellow-900/40 border-b border-yellow-800/50 flex items-center gap-2 text-xs text-yellow-300">
+          <span className="animate-spin">⏳</span>
+          {t.serverWaking}
         </div>
       )}
 
