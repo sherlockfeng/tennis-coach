@@ -47,7 +47,7 @@ export async function chatWithOpenAI(messages: ChatMessage[], apiKey?: string, c
 
   const res = await client.chat.completions.create({
     model: config.openai.model,
-    max_tokens: 2048,
+    max_tokens: 4096,
     messages: formatted,
   })
 

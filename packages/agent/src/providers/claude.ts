@@ -51,7 +51,7 @@ export async function chatWithClaude(messages: ChatMessage[], apiKey?: string, c
 
   const response = await client.messages.create({
     model: config.claude.model,
-    max_tokens: 2048,
+    max_tokens: 4096,
     system: buildSystemPrompt(coachStyle, language),
     messages: formatted,
   })

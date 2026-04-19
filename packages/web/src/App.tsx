@@ -7,7 +7,7 @@ import { TRANSLATIONS, detectLang, type Lang } from './i18n.js'
 
 // In production VITE_API_BASE points to the Render backend URL.
 // In development it's empty, so requests go through the Vite proxy.
-const api = axios.create({ baseURL: import.meta.env.VITE_API_BASE ?? '' })
+const api = axios.create({ baseURL: import.meta.env.VITE_API_BASE ?? '', timeout: 90_000 })
 
 // ─── Types ───────────────────────────────────────────────────────────
 
