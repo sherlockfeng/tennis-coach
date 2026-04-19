@@ -175,7 +175,24 @@ CREATE TABLE IF NOT EXISTS users (
 
 ---
 
-## 本地开发
+## 多语言（i18n）
+
+**文件**：`packages/web/src/i18n.ts`
+
+- 支持语言：`zh`（中文）、`en`（英文）
+- 检测顺序：localStorage `tc_lang` → `navigator.language` → 默认 `zh`
+- 导出 `type Lang`、`TRANSLATIONS`、`detectLang()`
+- 在 App.tsx 中用 `const t = TRANSLATIONS[lang]` 按 key 取文字
+- HistorySidebar 接收 `lang: Lang` prop
+
+**AI 对话语言强制**：
+- 前端通过 `X-Language` header 传递语言（`zh` 或 `en`）
+- 后端 `resolveChat()` 读取并传入 `ChatOptions.language`
+- `buildSystemPrompt(coachStyle, language)` 追加强制语言指令：
+  - `en`：`"You MUST respond in English only."`
+  - `zh`：`"请始终用中文回复。"`
+
+
 
 ```bash
 # 前提：系统已安装 ffmpeg

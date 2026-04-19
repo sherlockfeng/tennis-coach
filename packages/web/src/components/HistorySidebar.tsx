@@ -1,5 +1,6 @@
 import axios from 'axios'
 import { useEffect, useState } from 'react'
+import { TRANSLATIONS, type Lang } from '../i18n.js'
 
 interface Session {
   id: number
@@ -35,14 +36,14 @@ const TYPE_ICON: Record<string, string> = {
   compare: '📊',
 }
 
-function formatDate(ts: number) {
+function formatDate(ts: number, t: { yesterday: string; daysAgo: (n: number) => string }) {
   const d = new Date(ts)
   const now = new Date()
   const diffDays = Math.floor((now.getTime() - ts) / 86400000)
-  if (diffDays === 0) return d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
-  if (diffDays === 1) return '昨天'
-  if (diffDays < 7) return `${diffDays}天前`
-  return d.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' })
+  if (diffDays === 0) return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  if (diffDays === 1) return t.yesterday
+  if (diffDays < 7) return t.daysAgo(diffDays)
+  return d.toLocaleDateString([], { month: 'numeric', day: 'numeric' })
 }
 
 export default function HistorySidebar({
@@ -51,13 +52,16 @@ export default function HistorySidebar({
   onLoad,
   onClose,
   currentSessionId,
+  lang,
 }: {
   api: ReturnType<typeof axios.create>
   authToken: string
   onLoad: (s: LoadedSession) => void
   onClose: () => void
   currentSessionId: number | null
+  lang: Lang
 }) {
+  const t = TRANSLATIONS[lang]
   const [sessions, setSessions] = useState<Session[]>([])
   const [profile, setProfile] = useState<TechniqueProfile | null>(null)
   const [loadingId, setLoadingId] = useState<number | null>(null)
@@ -100,7 +104,7 @@ export default function HistorySidebar({
     <div className="w-72 shrink-0 bg-gray-950 border-r border-gray-800 flex flex-col h-full">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800 shrink-0">
-        <h2 className="text-sm font-bold text-white">历史记录</h2>
+        <h2 className="text-sm font-bold text-white">{t.historyTitle}</h2>
         <button onClick={onClose} className="text-gray-500 hover:text-gray-300 text-lg">×</button>
       </div>
 
@@ -108,15 +112,15 @@ export default function HistorySidebar({
         {/* Technique Profile */}
         {hasTags && (
           <div className="px-4 py-3 border-b border-gray-800">
-            <p className="text-xs font-semibold text-gray-400 mb-2">我的技术档案</p>
+            <p className="text-xs font-semibold text-gray-400 mb-2">{t.myProfile}</p>
             {profile!.strengths.length > 0 && (
               <div className="mb-1.5">
-                <p className="text-[10px] text-green-500 mb-1">优点</p>
+                <p className="text-[10px] text-green-500 mb-1">{t.strengths}</p>
                 <div className="flex flex-wrap gap-1">
-                  {profile!.strengths.map((t, i) => (
+                  {profile!.strengths.map((tag, i) => (
                     <span key={i} className="px-2 py-0.5 rounded-full text-[10px]
                       bg-green-900/40 text-green-300 border border-green-800">
-                      {t}
+                      {tag}
                     </span>
                   ))}
                 </div>
@@ -124,12 +128,12 @@ export default function HistorySidebar({
             )}
             {profile!.weaknesses.length > 0 && (
               <div className="mb-1.5">
-                <p className="text-[10px] text-yellow-500 mb-1">待改进</p>
+                <p className="text-[10px] text-yellow-500 mb-1">{t.weaknesses}</p>
                 <div className="flex flex-wrap gap-1">
-                  {profile!.weaknesses.map((t, i) => (
+                  {profile!.weaknesses.map((tag, i) => (
                     <span key={i} className="px-2 py-0.5 rounded-full text-[10px]
                       bg-yellow-900/40 text-yellow-300 border border-yellow-800">
-                      {t}
+                      {tag}
                     </span>
                   ))}
                 </div>
@@ -137,12 +141,12 @@ export default function HistorySidebar({
             )}
             {profile!.style_tags.length > 0 && (
               <div>
-                <p className="text-[10px] text-blue-500 mb-1">打法风格</p>
+                <p className="text-[10px] text-blue-500 mb-1">{t.styleTags}</p>
                 <div className="flex flex-wrap gap-1">
-                  {profile!.style_tags.map((t, i) => (
+                  {profile!.style_tags.map((tag, i) => (
                     <span key={i} className="px-2 py-0.5 rounded-full text-[10px]
                       bg-blue-900/40 text-blue-300 border border-blue-800">
-                      {t}
+                      {tag}
                     </span>
                   ))}
                 </div>
@@ -154,7 +158,7 @@ export default function HistorySidebar({
         {/* Session list */}
         <div className="py-2">
           {sessions.length === 0 ? (
-            <p className="text-xs text-gray-600 text-center py-8">暂无历史记录</p>
+            <p className="text-xs text-gray-600 text-center py-8">{t.noHistory}</p>
           ) : (
             sessions.map(s => (
               <button
@@ -166,9 +170,9 @@ export default function HistorySidebar({
                 <span className="text-base shrink-0 mt-0.5">{TYPE_ICON[s.type] ?? '💬'}</span>
                 <div className="flex-1 min-w-0">
                   <p className="text-xs text-gray-200 truncate leading-tight">
-                    {loadingId === s.id ? '加载中…' : s.title || '未命名对话'}
+                    {loadingId === s.id ? t.loading : s.title || t.untitled}
                   </p>
-                  <p className="text-[10px] text-gray-600 mt-0.5">{formatDate(s.updated_at)}</p>
+                  <p className="text-[10px] text-gray-600 mt-0.5">{formatDate(s.updated_at, t)}</p>
                 </div>
                 <button
                   onClick={e => deleteSession(s.id, e)}

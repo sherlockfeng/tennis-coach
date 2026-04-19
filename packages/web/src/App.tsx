@@ -3,6 +3,7 @@ import axios from 'axios'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import HistorySidebar, { type LoadedSession } from './components/HistorySidebar.js'
+import { TRANSLATIONS, detectLang, type Lang } from './i18n.js'
 
 // In production VITE_API_BASE points to the Render backend URL.
 // In development it's empty, so requests go through the Vite proxy.
@@ -24,12 +25,14 @@ interface AuthUser {
 }
 
 const COACH_PRESETS = [
-  { id: 'balanced', label: '均衡型', instruction: '' },
-  { id: 'strict',   label: '严厉型', instruction: '请以严厉风格执教：直接指出所有问题，不要过多鼓励，像对待职业球员一样严格要求，要求学员做到更好。' },
-  { id: 'question', label: '启发型', instruction: '请以启发式风格执教：多用问题引导学员自己思考（如"你觉得这里的击球点应该在哪里？"），少直接给答案，帮助学员建立自主分析能力。' },
-  { id: 'detail',   label: '细节型', instruction: '请以细节深度风格执教：深入分析每个技术细节，每个动作阶段都要详细拆解，不放过任何可以改进的点，提供更多技术深度。' },
-  { id: 'custom',   label: '自定义', instruction: '' },
+  { id: 'balanced', instruction: '' },
+  { id: 'strict',   instruction: '请以严厉风格执教：直接指出所有问题，不要过多鼓励，像对待职业球员一样严格要求，要求学员做到更好。' },
+  { id: 'question', instruction: '请以启发式风格执教：多用问题引导学员自己思考（如"你觉得这里的击球点应该在哪里？"），少直接给答案，帮助学员建立自主分析能力。' },
+  { id: 'detail',   instruction: '请以细节深度风格执教：深入分析每个技术细节，每个动作阶段都要详细拆解，不放过任何可以改进的点，提供更多技术深度。' },
+  { id: 'custom',   instruction: '' },
 ] as const
+
+type CoachPresetId = typeof COACH_PRESETS[number]['id']
 
 const SETTINGS_KEY = 'tc_user_settings'
 const AUTH_KEY = 'tc_auth'
@@ -67,10 +70,13 @@ function clearAuth() {
 function LoginModal({
   onClose,
   onSuccess,
+  lang,
 }: {
   onClose: () => void
   onSuccess: (token: string, user: AuthUser) => void
+  lang: Lang
 }) {
+  const t = TRANSLATIONS[lang]
   const [mode, setMode] = useState<'login' | 'register'>('login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -97,15 +103,13 @@ function LoginModal({
       <div className="bg-gray-900 border border-gray-700 rounded-2xl p-6 w-full max-w-sm space-y-5">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-bold text-white">
-            {mode === 'login' ? '登录账号' : '注册账号'}
+            {mode === 'login' ? t.loginTitle : t.registerTitle}
           </h2>
           <button onClick={onClose} className="text-gray-500 hover:text-gray-300 text-lg">×</button>
         </div>
 
         <p className="text-xs text-gray-400 leading-relaxed">
-          {mode === 'login'
-            ? '登录后可将 API Key 绑定到账号，换设备也能直接使用。'
-            : '注册后可保存你的 API Key 和网球数据到账号。'}
+          {mode === 'login' ? t.loginDesc : t.registerDesc}
         </p>
 
         <div className="space-y-3">
@@ -113,7 +117,7 @@ function LoginModal({
             type="email"
             value={email}
             onChange={e => setEmail(e.target.value)}
-            placeholder="邮箱"
+            placeholder={t.emailPlaceholder}
             className="w-full bg-gray-800 rounded-lg px-3 py-2 text-sm text-gray-100
               placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-green-600"
           />
@@ -121,7 +125,7 @@ function LoginModal({
             type="password"
             value={password}
             onChange={e => setPassword(e.target.value)}
-            placeholder="密码（至少 6 位）"
+            placeholder={t.passwordPlaceholder}
             onKeyDown={e => { if (e.key === 'Enter') submit() }}
             className="w-full bg-gray-800 rounded-lg px-3 py-2 text-sm text-gray-100
               placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-green-600"
@@ -135,13 +139,13 @@ function LoginModal({
           disabled={loading || !email || !password}
           className="w-full py-2.5 rounded-xl text-sm font-semibold bg-green-600 hover:bg-green-500
             disabled:bg-gray-700 disabled:text-gray-500 transition-colors">
-          {loading ? '请稍候…' : mode === 'login' ? '登录' : '注册'}
+          {loading ? t.submitting : mode === 'login' ? t.loginBtn : t.registerBtn}
         </button>
 
         <button
           onClick={() => { setMode(m => m === 'login' ? 'register' : 'login'); setError('') }}
           className="w-full text-xs text-gray-500 hover:text-gray-300 transition-colors">
-          {mode === 'login' ? '还没有账号？点击注册' : '已有账号？点击登录'}
+          {mode === 'login' ? t.switchToRegister : t.switchToLogin}
         </button>
       </div>
     </div>
@@ -180,7 +184,8 @@ type PanelMode = 'analyze' | 'compare' | 'pro'
 
 // ─── Sub-components ──────────────────────────────────────────────────
 
-function MessageBubble({ msg }: { msg: ChatMessage }) {
+function MessageBubble({ msg, lang }: { msg: ChatMessage; lang: Lang }) {
+  const t = TRANSLATIONS[lang]
   const isUser = msg.role === 'user'
   return (
     <div className={`flex gap-3 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
@@ -199,7 +204,7 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
         )}
         {msg.frames && msg.frames.length > 0 && (
           <div>
-            <p className="text-xs text-gray-500 mb-1">已提取 {msg.frames.length} 帧</p>
+            <p className="text-xs text-gray-500 mb-1">{t.framesExtracted(msg.frames.length)}</p>
             <div className="flex flex-wrap gap-1">
               {msg.frames.map((f, i) => {
                 const src = f.startsWith('http') ? f : `data:image/jpeg;base64,${f}`
@@ -258,7 +263,7 @@ function FrameSlider({ label, value, min, max, step, unit, onChange }: {
 }
 
 function VideoSlot({
-  label, file, preview, onSelect, onClear, onDrop, settings, onSettingsChange, videoRef,
+  label, file, preview, onSelect, onClear, onDrop, settings, onSettingsChange, videoRef, lang,
 }: {
   label: string
   file: File | null
@@ -269,7 +274,9 @@ function VideoSlot({
   settings: FrameSettings
   onSettingsChange: (s: FrameSettings) => void
   videoRef: React.RefObject<HTMLVideoElement>
+  lang: Lang
 }) {
+  const t = TRANSLATIONS[lang]
   const [dragging, setDragging] = useState(false)
   const frameCount = Math.max(1, Math.floor((settings.endSec - settings.startSec) * settings.fps))
 
@@ -296,7 +303,7 @@ function VideoSlot({
               ? 'border-green-400 bg-green-950/40'
               : 'border-gray-700 hover:border-green-500 hover:bg-green-950/20'}`}>
           <div className="text-xl mb-1">{dragging ? '🎬' : '📁'}</div>
-          <p className="text-xs text-gray-400">{dragging ? '松开即可上传' : '点击选择 或 拖拽视频到此处'}</p>
+          <p className="text-xs text-gray-400">{dragging ? t.dropHint : t.clickOrDrop}</p>
         </div>
       ) : (
         <div className="space-y-2">
@@ -315,20 +322,20 @@ function VideoSlot({
               }} />
           )}
           <div className="bg-gray-800 rounded-lg p-3 space-y-2">
-            <FrameSlider label="开始" value={settings.startSec} min={0}
-              max={Math.max(0, settings.videoDuration - 1)} step={1} unit="s"
+            <FrameSlider label={t.startSec} value={settings.startSec} min={0}
+              max={Math.max(0, settings.videoDuration - 1)} step={1} unit={t.secUnit}
               onChange={(v) => onSettingsChange({
                 ...settings, startSec: v,
                 endSec: v >= settings.endSec ? Math.min(v + 1, settings.videoDuration) : settings.endSec,
               })} />
-            <FrameSlider label="结束" value={settings.endSec}
-              min={settings.startSec + 1} max={settings.videoDuration} step={1} unit="s"
+            <FrameSlider label={t.endSec} value={settings.endSec}
+              min={settings.startSec + 1} max={settings.videoDuration} step={1} unit={t.secUnit}
               onChange={(v) => onSettingsChange({ ...settings, endSec: v })} />
-            <FrameSlider label="帧率" value={settings.fps} min={0.5} max={5} step={0.5} unit="fps"
+            <FrameSlider label={t.fpsSetting} value={settings.fps} min={0.5} max={5} step={0.5} unit={t.fpsUnit}
               onChange={(v) => onSettingsChange({ ...settings, fps: v })} />
             <div className="text-right text-xs">
               <span className={frameCount > 20 ? 'text-yellow-400' : 'text-green-400'}>
-                约 {frameCount} 帧{frameCount > 20 ? ' ⚠️' : ''}
+                {t.framesExtracted(frameCount)}{frameCount > 20 ? ' ⚠️' : ''}
               </span>
             </div>
           </div>
@@ -343,6 +350,15 @@ function VideoSlot({
 const DEFAULT_SETTINGS: FrameSettings = { startSec: 0, endSec: 10, fps: 2, videoDuration: 10 }
 
 export default function App() {
+  // ── Language ─────────────────────────────────────────────────────
+  const [lang, setLang] = useState<Lang>(() => detectLang())
+  const t = TRANSLATIONS[lang]
+
+  const changeLang = (l: Lang) => {
+    localStorage.setItem('tc_lang', l)
+    setLang(l)
+  }
+
   // ── Auth ────────────────────────────────────────────────────────
   const [authToken, setAuthToken] = useState<string | null>(() => loadAuth()?.token ?? null)
   const [authUser, setAuthUser] = useState<AuthUser | null>(() => loadAuth()?.user ?? null)
@@ -376,7 +392,7 @@ export default function App() {
   const [syncingToken, setSyncingToken] = useState(false)
   const [syncMsg, setSyncMsg] = useState('')
   const [coachStyle, setCoachStyle] = useState(() => loadAuth()?.user.coachStyle ?? '')
-  const [draftCoachPreset, setDraftCoachPreset] = useState('balanced')
+  const [draftCoachPreset, setDraftCoachPreset] = useState<CoachPresetId>('balanced')
   const [draftCoachCustom, setDraftCoachCustom] = useState('')
   const [savingStyle, setSavingStyle] = useState(false)
 
@@ -426,11 +442,12 @@ export default function App() {
     ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
     ...(currentSessionId ? { 'X-Session-Id': String(currentSessionId) } : {}),
     ...(coachStyle ? { 'X-Coach-Style': encodeURIComponent(coachStyle) } : {}),
+    'X-Language': lang,
   }
 
   const [messages, setMessages] = useState<ChatMessage[]>([{
     role: 'assistant',
-    content: '你好！我是你的 AI 网球教练 🎾\n\n你可以：\n• 直接发消息提问\n• 上传图片分析动作\n• 上传视频逐帧分析\n• 两段视频对比（改进前后）\n• 与职业球员对比，或推荐相似风格球员',
+    content: t.welcomeMsg,
   }])
   const [apiHistory, setApiHistory] = useState<{ role: 'user' | 'assistant'; content: string }[]>([])
   const [inputText, setInputText] = useState('')
@@ -490,8 +507,8 @@ export default function App() {
     const userMsg: ChatMessage = {
       role: 'user',
       content: text || (snapshot.length > 1
-        ? `请分析这 ${snapshot.length} 张图片中的网球动作。`
-        : '请分析这张图片中的网球动作。'),
+        ? t.imageAnalysisPromptMulti(snapshot.length)
+        : t.imageAnalysisPromptSingle),
       images: snapshot.map(p => p.b64),
     }
     addMessage(userMsg)
@@ -525,7 +542,7 @@ export default function App() {
       addMessage({ role: 'assistant', content: reply })
     } catch (err: unknown) {
       const msg = axios.isAxiosError(err) ? (err.response?.data?.error ?? err.message) : String(err)
-      addMessage({ role: 'assistant', content: `❌ 出错了：${msg}` })
+      addMessage({ role: 'assistant', content: t.errorPrefix + msg })
     } finally {
       setLoading(false)
     }
@@ -537,7 +554,7 @@ export default function App() {
     setLoading(true)
     setShowVideoPanel(false)
 
-    addMessage({ role: 'user', content: `📹 视频分析：第 ${settingsA.startSec}s~${settingsA.endSec}s，${settingsA.fps} fps（约 ${frameCountA} 帧）` })
+    addMessage({ role: 'user', content: t.videoAnalysisMsg(settingsA.startSec, settingsA.endSec, settingsA.fps, frameCountA) })
 
     try {
       const fd = new FormData()
@@ -557,7 +574,7 @@ export default function App() {
       setVideoA(null); setPreviewA(null)
     } catch (err: unknown) {
       const msg = axios.isAxiosError(err) ? (err.response?.data?.error ?? err.message) : String(err)
-      addMessage({ role: 'assistant', content: `❌ 分析失败：${msg}` })
+      addMessage({ role: 'assistant', content: t.analysisFailed + msg })
     } finally {
       setLoading(false)
     }
@@ -570,10 +587,10 @@ export default function App() {
     setShowVideoPanel(false)
 
     const modeLabel = panelMode === 'compare'
-      ? `📊 两段视频对比`
+      ? t.panelCompare
       : recommendMode
-        ? `🔍 打法风格推荐`
-        : `🏆 与${selectedPlayer || '职业球员'}对比`
+        ? t.recommendStyle
+        : t.submitVsPlayer(selectedPlayer)
 
     addMessage({ role: 'user', content: modeLabel })
 
@@ -609,7 +626,7 @@ export default function App() {
       setVideoA(null); setPreviewA(null); setVideoB(null); setPreviewB(null)
     } catch (err: unknown) {
       const msg = axios.isAxiosError(err) ? (err.response?.data?.error ?? err.message) : String(err)
-      addMessage({ role: 'assistant', content: `❌ 对比分析失败：${msg}` })
+      addMessage({ role: 'assistant', content: t.compareFailed + msg })
     } finally {
       setLoading(false)
     }
@@ -633,11 +650,11 @@ export default function App() {
   const submitPanel = panelMode === 'analyze' ? sendVideoAnalysis : sendComparison
 
   const submitLabel = () => {
-    if (!canSubmitPanel) return panelMode === 'compare' ? '请上传两段视频' : '请先选择视频'
-    if (loading) return '分析中…'
-    if (panelMode === 'analyze') return `③ 开始分析（${frameCountA} 帧）`
-    if (panelMode === 'compare') return '③ 开始对比分析'
-    return recommendMode ? '③ 推荐相似球员' : `③ 与 ${selectedPlayer || '球员'} 对比`
+    if (!canSubmitPanel) return panelMode === 'compare' ? t.needBothVideos : t.noVideoYet
+    if (loading) return t.analyzing
+    if (panelMode === 'analyze') return t.submitAnalyze(frameCountA)
+    if (panelMode === 'compare') return t.submitCompare
+    return recommendMode ? t.submitRecommend : t.submitVsPlayer(selectedPlayer)
   }
 
   // ── Render ────────────────────────────────────────────────────────
@@ -645,7 +662,7 @@ export default function App() {
     <div className="flex h-screen">
       {/* Auth modal */}
       {showLogin && (
-        <LoginModal onClose={() => setShowLogin(false)} onSuccess={handleAuthSuccess} />
+        <LoginModal onClose={() => setShowLogin(false)} onSuccess={handleAuthSuccess} lang={lang} />
       )}
 
       {/* History sidebar — flex sibling, pushes content right instead of overlaying */}
@@ -655,6 +672,7 @@ export default function App() {
           authToken={authToken}
           currentSessionId={currentSessionId}
           onClose={() => setShowHistory(false)}
+          lang={lang}
           onLoad={(loaded: LoadedSession) => {
             setCurrentSessionId(loaded.sessionId)
             setShowHistory(false)
@@ -676,24 +694,24 @@ export default function App() {
       <header className="border-b border-gray-800 px-4 py-3 flex items-center gap-3 shrink-0">
         <span className="text-xl">🎾</span>
         <div className="flex-1">
-          <h1 className="text-base font-bold text-white">AI 网球教练</h1>
-          <p className="text-xs text-gray-500">专业分析 · 职业球员对比 · 器材推荐</p>
+          <h1 className="text-base font-bold text-white">{t.appTitle}</h1>
+          <p className="text-xs text-gray-500">{t.appSubtitle}</p>
         </div>
         <button
           onClick={() => {
-            setMessages([{ role: 'assistant', content: '新对话开始了 🎾 有什么可以帮你？' }])
+            setMessages([{ role: 'assistant', content: t.newChatStarted }])
             setApiHistory([])
             setCurrentSessionId(null)
           }}
           className="text-xs text-gray-500 hover:text-gray-300 transition-colors">
-          新对话
+          {t.newChat}
         </button>
 
         {/* History button — only when logged in */}
         {authUser && (
           <button
             onClick={() => setShowHistory(v => !v)}
-            title="历史记录"
+            title={t.historyTitle}
             className={`w-8 h-8 rounded-lg flex items-center justify-center text-base transition-colors
               ${showHistory ? 'bg-green-900/50 text-green-400' : 'bg-gray-800 text-gray-500 hover:text-gray-300'}`}>
             🕐
@@ -709,7 +727,7 @@ export default function App() {
             <button
               onClick={handleLogout}
               className="text-xs text-gray-500 hover:text-red-400 transition-colors">
-              退出
+              {t.logout}
             </button>
           </div>
         ) : (
@@ -717,7 +735,7 @@ export default function App() {
             onClick={() => setShowLogin(true)}
             className="text-xs text-gray-400 hover:text-green-400 transition-colors px-2 py-1
               rounded-lg bg-gray-800 hover:bg-gray-700">
-            登录
+            {t.login}
           </button>
         )}
 
@@ -729,7 +747,7 @@ export default function App() {
             setDraftCoachCustom(coachStyle)
             setShowSettings(true)
           }}
-          title="API Key 设置"
+          title={t.settingsTitle}
           className={`w-8 h-8 rounded-lg flex items-center justify-center text-base transition-colors
             ${settings.apiKey ? 'bg-green-900/50 text-green-400' : 'bg-gray-800 text-gray-500 hover:text-gray-300'}`}>
           ⚙️
@@ -741,17 +759,31 @@ export default function App() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
           <div className="bg-gray-900 border border-gray-700 rounded-2xl p-6 w-full max-w-sm space-y-5 overflow-y-auto max-h-[90vh]">
             <div className="flex items-center justify-between">
-              <h2 className="text-sm font-bold text-white">设置</h2>
+              <h2 className="text-sm font-bold text-white">{t.settingsTitle}</h2>
               <button onClick={() => setShowSettings(false)} className="text-gray-500 hover:text-gray-300 text-lg">×</button>
             </div>
 
-            <p className="text-xs text-gray-400 leading-relaxed">
-              Key 仅保存在你的浏览器本地，不会上传到服务器。
-            </p>
+            <p className="text-xs text-gray-400 leading-relaxed">{t.keyLocalNote}</p>
+
+            {/* Language */}
+            <div className="space-y-1.5">
+              <p className="text-xs text-gray-400 font-medium">{t.languageSection}</p>
+              <div className="flex gap-2">
+                {(['zh', 'en'] as const).map(l => (
+                  <button key={l} onClick={() => changeLang(l)}
+                    className={`flex-1 py-2 rounded-lg text-xs font-medium transition-colors
+                      ${lang === l
+                        ? 'bg-green-700 text-white'
+                        : 'bg-gray-800 text-gray-400 hover:text-gray-200'}`}>
+                    {l === 'zh' ? '🇨🇳 中文' : '🇬🇧 English'}
+                  </button>
+                ))}
+              </div>
+            </div>
 
             {/* Provider */}
             <div className="space-y-1.5">
-              <p className="text-xs text-gray-400 font-medium">AI 提供商</p>
+              <p className="text-xs text-gray-400 font-medium">{t.aiProvider}</p>
               <div className="flex gap-2">
                 {(['claude', 'openai'] as const).map(p => (
                   <button key={p} onClick={() => setDraftSettings(d => ({ ...d, provider: p }))}
@@ -768,7 +800,7 @@ export default function App() {
             {/* API Key input */}
             <div className="space-y-1.5">
               <p className="text-xs text-gray-400 font-medium">
-                {draftSettings.provider === 'claude' ? 'Anthropic API Key' : 'OpenAI API Key'}
+                {t.apiKeyLabel(draftSettings.provider)}
               </p>
               <div className="flex gap-2">
                 <input
@@ -781,38 +813,41 @@ export default function App() {
                 />
                 <button onClick={() => setShowKey(v => !v)}
                   className="px-3 rounded-lg bg-gray-800 text-gray-400 hover:text-gray-200 text-sm">
-                  {showKey ? '🙈' : '👁️'}
+                  {showKey ? t.hideKey : t.showKey}
                 </button>
               </div>
               {draftSettings.apiKey && (
-                <p className="text-xs text-green-500">✓ 已填写，将使用你自己的 Key</p>
+                <p className="text-xs text-green-500">{t.keyFilled}</p>
               )}
               {!draftSettings.apiKey && (
-                <p className="text-xs text-yellow-600">留空则使用服务器内置 Key（如有）</p>
+                <p className="text-xs text-yellow-600">{t.keyEmpty}</p>
               )}
             </div>
 
             {/* Coach style (shown only when logged in) */}
             {authUser && (
               <div className="space-y-2">
-                <p className="text-xs text-gray-400 font-medium">教练风格</p>
+                <p className="text-xs text-gray-400 font-medium">{t.coachStyleSection}</p>
                 <div className="grid grid-cols-2 gap-1.5">
-                  {COACH_PRESETS.map(p => (
-                    <button key={p.id}
-                      onClick={() => setDraftCoachPreset(p.id)}
-                      className={`py-1.5 rounded-lg text-xs font-medium transition-colors
-                        ${draftCoachPreset === p.id
-                          ? 'bg-green-700 text-white'
-                          : 'bg-gray-800 text-gray-400 hover:text-gray-200'}`}>
-                      {p.label}
-                    </button>
-                  ))}
+                  {COACH_PRESETS.map(p => {
+                    const labelKey = `preset${p.id.charAt(0).toUpperCase() + p.id.slice(1)}` as keyof typeof t
+                    return (
+                      <button key={p.id}
+                        onClick={() => setDraftCoachPreset(p.id)}
+                        className={`py-1.5 rounded-lg text-xs font-medium transition-colors
+                          ${draftCoachPreset === p.id
+                            ? 'bg-green-700 text-white'
+                            : 'bg-gray-800 text-gray-400 hover:text-gray-200'}`}>
+                        {t[labelKey] as string}
+                      </button>
+                    )
+                  })}
                 </div>
                 {draftCoachPreset === 'custom' && (
                   <textarea
                     value={draftCoachCustom}
                     onChange={e => setDraftCoachCustom(e.target.value)}
-                    placeholder="描述你想要的教练风格，例如：严厉一些，多提意见，少鼓励…"
+                    placeholder={t.coachStylePlaceholder}
                     rows={3}
                     className="w-full bg-gray-800 rounded-lg px-3 py-2 text-xs text-gray-100
                       placeholder-gray-600 resize-none focus:outline-none focus:ring-1 focus:ring-green-600"
@@ -823,7 +858,7 @@ export default function App() {
                   disabled={savingStyle}
                   className="w-full py-2 rounded-xl text-xs font-medium bg-gray-800
                     text-gray-300 hover:text-green-400 hover:bg-gray-700 disabled:opacity-50 transition-colors">
-                  {savingStyle ? '保存中…' : '保存风格偏好'}
+                  {savingStyle ? t.saving : t.saveStyle}
                 </button>
               </div>
             )}
@@ -836,10 +871,10 @@ export default function App() {
                   disabled={syncingToken}
                   className="w-full py-2 rounded-xl text-xs font-medium bg-gray-800
                     text-gray-300 hover:text-green-400 hover:bg-gray-700 disabled:opacity-50 transition-colors">
-                  {syncingToken ? '同步中…' : '同步 Key 到账号'}
+                  {syncingToken ? t.syncing : t.syncKey}
                 </button>
                 {syncMsg && (
-                  <p className={`text-xs text-center ${syncMsg.includes('失败') ? 'text-red-400' : 'text-green-400'}`}>
+                  <p className={`text-xs text-center ${syncMsg.includes('失败') || syncMsg.toLowerCase().includes('fail') ? 'text-red-400' : 'text-green-400'}`}>
                     {syncMsg}
                   </p>
                 )}
@@ -851,7 +886,7 @@ export default function App() {
               <button
                 onClick={() => setDraftSettings(d => ({ ...d, apiKey: '' }))}
                 className="flex-1 py-2 rounded-xl text-xs text-gray-500 hover:text-red-400 bg-gray-800 transition-colors">
-                清除 Key
+                {t.clearKey}
               </button>
               <button
                 onClick={() => {
@@ -860,7 +895,7 @@ export default function App() {
                   setShowSettings(false)
                 }}
                 className="flex-1 py-2 rounded-xl text-sm font-semibold bg-green-600 hover:bg-green-500 text-white transition-colors">
-                保存
+                {t.save}
               </button>
             </div>
           </div>
@@ -869,7 +904,7 @@ export default function App() {
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
-        {messages.map((msg, i) => <MessageBubble key={i} msg={msg} />)}
+        {messages.map((msg, i) => <MessageBubble key={i} msg={msg} lang={lang} />)}
         {loading && (
           <div className="flex gap-3">
             <div className="w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center">🎾</div>
@@ -909,9 +944,9 @@ export default function App() {
           <div className="flex items-center justify-between">
             <div className="flex gap-1 bg-gray-800 rounded-lg p-1">
               {([
-                { id: 'analyze', label: '📹 单段分析' },
-                { id: 'compare', label: '📊 两段对比' },
-                { id: 'pro',     label: '🏆 职业对比' },
+                { id: 'analyze', label: t.panelAnalyze },
+                { id: 'compare', label: t.panelCompare },
+                { id: 'pro',     label: t.panelPro },
               ] as { id: PanelMode; label: string }[]).map(tab => (
                 <button
                   key={tab.id}
@@ -931,13 +966,13 @@ export default function App() {
           {/* ── Mode: single analysis ── */}
           {panelMode === 'analyze' && (
             <VideoSlot
-              label="① 选择视频"
+              label={t.videoSlotSingle}
               file={videoA} preview={previewA}
               onSelect={() => fileARef.current?.click()}
               onClear={() => { setVideoA(null); setPreviewA(null) }}
               onDrop={f => { setVideoA(f); setPreviewA(URL.createObjectURL(f)) }}
               settings={settingsA} onSettingsChange={setSettingsA}
-              videoRef={videoRefA}
+              videoRef={videoRefA} lang={lang}
             />
           )}
 
@@ -945,22 +980,22 @@ export default function App() {
           {panelMode === 'compare' && (
             <div className="grid grid-cols-2 gap-4">
               <VideoSlot
-                label="① 视频 A（改进前）"
+                label={t.videoSlotA}
                 file={videoA} preview={previewA}
                 onSelect={() => fileARef.current?.click()}
                 onClear={() => { setVideoA(null); setPreviewA(null) }}
                 onDrop={f => { setVideoA(f); setPreviewA(URL.createObjectURL(f)) }}
                 settings={settingsA} onSettingsChange={setSettingsA}
-                videoRef={videoRefA}
+                videoRef={videoRefA} lang={lang}
               />
               <VideoSlot
-                label="② 视频 B（改进后）"
+                label={t.videoSlotB}
                 file={videoB} preview={previewB}
                 onSelect={() => fileBRef.current?.click()}
                 onClear={() => { setVideoB(null); setPreviewB(null) }}
                 onDrop={f => { setVideoB(f); setPreviewB(URL.createObjectURL(f)) }}
                 settings={settingsB} onSettingsChange={setSettingsB}
-                videoRef={videoRefB}
+                videoRef={videoRefB} lang={lang}
               />
             </div>
           )}
@@ -969,29 +1004,29 @@ export default function App() {
           {panelMode === 'pro' && (
             <div className="space-y-4">
               <VideoSlot
-                label="① 选择你的视频"
+                label={t.videoSlotPro}
                 file={videoA} preview={previewA}
                 onSelect={() => fileARef.current?.click()}
                 onClear={() => { setVideoA(null); setPreviewA(null) }}
                 onDrop={f => { setVideoA(f); setPreviewA(URL.createObjectURL(f)) }}
                 settings={settingsA} onSettingsChange={setSettingsA}
-                videoRef={videoRefA}
+                videoRef={videoRefA} lang={lang}
               />
 
               <div className="space-y-2">
-                <p className="text-xs font-semibold text-gray-400">② 对比方式</p>
+                <p className="text-xs font-semibold text-gray-400">{t.compareMethod}</p>
                 <div className="flex gap-2">
                   <button
                     onClick={() => setRecommendMode(false)}
                     className={`flex-1 py-2 rounded-lg text-xs font-medium transition-colors
                       ${!recommendMode ? 'bg-green-700 text-white' : 'bg-gray-800 text-gray-400 hover:text-gray-200'}`}>
-                    选择球员对比
+                    {t.selectPlayer}
                   </button>
                   <button
                     onClick={() => setRecommendMode(true)}
                     className={`flex-1 py-2 rounded-lg text-xs font-medium transition-colors
                       ${recommendMode ? 'bg-green-700 text-white' : 'bg-gray-800 text-gray-400 hover:text-gray-200'}`}>
-                    推荐相似风格
+                    {t.recommendStyle}
                   </button>
                 </div>
 
@@ -1057,15 +1092,15 @@ export default function App() {
           value={inputText}
           onChange={e => setInputText(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendTextMessage() } }}
-          placeholder="问教练任何网球问题… (Enter 发送)"
+          placeholder={t.inputPlaceholder}
           rows={1}
           className="flex-1 bg-gray-800 rounded-xl px-4 py-2.5 text-sm text-gray-100
             placeholder-gray-500 resize-none focus:outline-none focus:ring-1 focus:ring-green-600
             min-h-[38px] max-h-32 overflow-y-auto"
           onInput={e => {
-            const t = e.target as HTMLTextAreaElement
-            t.style.height = 'auto'
-            t.style.height = Math.min(t.scrollHeight, 128) + 'px'
+            const el = e.target as HTMLTextAreaElement
+            el.style.height = 'auto'
+            el.style.height = Math.min(el.scrollHeight, 128) + 'px'
           }}
         />
 

@@ -1,5 +1,11 @@
 import { test, expect } from '@playwright/test'
 
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('tc_lang', 'zh')
+  })
+})
+
 // ─── Layout & Initial State ──────────────────────────────────────────
 
 test('shows header with coach title', async ({ page }) => {

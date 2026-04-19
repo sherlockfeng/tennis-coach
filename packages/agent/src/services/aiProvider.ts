@@ -11,15 +11,18 @@ export interface ChatOptions {
   apiKey?: string
   /** User's personal coach style preference, appended to the system prompt */
   coachStyle?: string
+  /** Force AI to respond in this language: 'zh' | 'en' */
+  language?: string
 }
 
 export async function chat(messages: ChatMessage[], options?: ChatOptions): Promise<string> {
   const provider   = options?.provider   ?? config.provider
   const apiKey     = options?.apiKey
   const coachStyle = options?.coachStyle
+  const language   = options?.language
 
   if (provider === 'claude') {
-    return chatWithClaude(messages, apiKey, coachStyle)
+    return chatWithClaude(messages, apiKey, coachStyle, language)
   }
-  return chatWithOpenAI(messages, apiKey, coachStyle)
+  return chatWithOpenAI(messages, apiKey, coachStyle, language)
 }
