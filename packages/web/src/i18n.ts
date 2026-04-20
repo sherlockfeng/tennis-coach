@@ -11,7 +11,7 @@ export const TRANSLATIONS = {
     login: '登录',
 
     // Welcome & system messages
-    welcomeMsg: '你好！我是你的 AI 网球教练 🎾\n\n你可以：\n• 直接发消息提问\n• 上传图片分析动作\n• 上传视频逐帧分析\n• 两段视频对比（改进前后）\n• 与职业球员对比，或推荐相似风格球员',
+    welcomeMsg: '你好！我是你的 AI 网球教练 🎾\n\n你可以：\n- 直接发消息提问\n- 上传图片分析动作\n- 上传视频逐帧分析\n- 两段视频对比（改进前后）\n- 与职业球员对比，或推荐相似风格球员',
     newChatStarted: '新对话开始了 🎾 有什么可以帮你？',
     framesExtracted: (n: number) => `已提取 ${n} 帧`,
     errorPrefix: '❌ 出错了：',
@@ -23,7 +23,7 @@ export const TRANSLATIONS = {
       `📹 视频分析：第 ${start}s~${end}s，${fps} fps（约 ${frames} 帧）`,
 
     // Input
-    inputPlaceholder: '有什么网球问题？（Enter 发送，Shift+Enter 换行）',
+    inputPlaceholder: '有什么网球问题？',
     send: '发送',
 
     // Settings modal
@@ -118,7 +118,7 @@ export const TRANSLATIONS = {
     logout: 'Sign Out',
     login: 'Sign In',
 
-    welcomeMsg: 'Hi! I\'m your AI Tennis Coach 🎾\n\nYou can:\n• Chat and ask any tennis question\n• Upload images to analyze your form\n• Upload video for frame-by-frame analysis\n• Compare two video clips (before & after)\n• Compare with pro players or find your style match',
+    welcomeMsg: 'Hi! I\'m your AI Tennis Coach 🎾\n\nYou can:\n- Chat and ask any tennis question\n- Upload images to analyze your form\n- Upload video for frame-by-frame analysis\n- Compare two video clips (before & after)\n- Compare with pro players or find your style match',
     newChatStarted: 'New chat started 🎾 How can I help?',
     framesExtracted: (n: number) => `${n} frames extracted`,
     errorPrefix: '❌ Error: ',
@@ -129,7 +129,7 @@ export const TRANSLATIONS = {
     videoAnalysisMsg: (start: number, end: number, fps: number, frames: number) =>
       `📹 Video analysis: ${start}s–${end}s, ${fps} fps (~${frames} frames)`,
 
-    inputPlaceholder: 'Ask a tennis question… (Enter to send, Shift+Enter for newline)',
+    inputPlaceholder: 'Ask a tennis question…',
     send: 'Send',
 
     settingsTitle: 'Settings',
