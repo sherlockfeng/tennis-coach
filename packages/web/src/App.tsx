@@ -714,7 +714,7 @@ export default function App() {
 
   // ── Render ────────────────────────────────────────────────────────
   return (
-    <div className="flex h-screen">
+    <div className="flex flex-col h-dvh">
       {/* Auth modal */}
       {showLogin && (
         <LoginModal onClose={() => setShowLogin(false)} onSuccess={handleAuthSuccess} lang={lang} />

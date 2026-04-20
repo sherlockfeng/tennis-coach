@@ -22,6 +22,15 @@ export default defineConfig({
         },
       },
     },
+    {
+      name: 'mobile-chrome',
+      use: {
+        ...devices['Pixel 5'],
+        launchOptions: {
+          executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
+        },
+      },
+    },
   ],
 
   webServer: {
